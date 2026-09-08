@@ -92,9 +92,10 @@ function markerColor(cat: string | null | undefined): string {
 
 // ---- Channel icons --------------------------------------------------------
 const CHANNEL_ICONS: Record<string, { color: string; emoji: string }> = {
-  VIS: { color: '#F59E0B', emoji: '☀' },
-  IR:  { color: '#EF4444', emoji: '🌡' },
-  WV:  { color: '#3B82F6', emoji: '💧' },
+  VIS:  { color: '#F59E0B', emoji: '☀' },
+  IR:   { color: '#EF4444', emoji: '🌡' },
+  WV:   { color: '#3B82F6', emoji: '💧' },
+  TIR1: { color: '#EF4444', emoji: '🌡' },
 };
 
 // ---- Component ------------------------------------------------------------
@@ -543,13 +544,13 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         source="OpenStreetMap contributors"
       />
 
-      {/* Satellite layers header */}
+      {/* NASA GIBS layers header */}
       <div style={{
         fontSize: 10, fontWeight: 700, color: '#9CA3AF',
         letterSpacing: '0.08em', margin: '14px 0 8px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span>SATELLITE IMAGERY</span>
+        <span>NASA GIBS IMAGERY</span>
         {satelliteDateLabel && (
           <span style={{
             background: '#EEF2FF', color: '#4338CA', padding: '2px 6px',
@@ -566,7 +567,8 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         </div>
       )}
 
-      {satelliteLayers.map(layer => (
+      {/* GIBS layers (have tile_url) */}
+      {satelliteLayers.filter(l => l.tile_url).map(layer => (
         <SatelliteLayerRow
           key={layer.layer_id}
           layer={layer}
@@ -577,13 +579,36 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         />
       ))}
 
+      {/* MOSDAC/ISRO layers (no tile_url — metadata only) */}
+      {satelliteLayers.some(l => !l.tile_url) && (
+        <>
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: '#9CA3AF',
+            letterSpacing: '0.08em', margin: '14px 0 8px',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>MOSDAC / ISRO</span>
+            <span style={{
+              background: '#FFF7ED', color: '#C2410C', padding: '2px 6px',
+              borderRadius: 4, fontSize: 9, fontWeight: 600,
+            }}>
+              INSAT-3DR
+            </span>
+          </div>
+
+          {satelliteLayers.filter(l => !l.tile_url).map(layer => (
+            <MOSDACLayerRow key={layer.layer_id} layer={layer} />
+          ))}
+        </>
+      )}
+
       <div style={{
         marginTop: 12, padding: '8px 10px',
         background: '#F9FAFB', borderRadius: 6,
         fontSize: 10, color: '#9CA3AF', lineHeight: 1.5,
       }}>
-        <strong>Source:</strong> NASA GIBS (Global Imagery Browse Services).
-        Tiles are near-real-time (~3-5h latency). No fabricated imagery.
+        <strong>Sources:</strong> NASA GIBS (tiles, NRT ~3-5h) + MOSDAC/ISRO (INSAT-3DR metadata).
+        No fabricated imagery.
       </div>
     </div>
   );
@@ -706,6 +731,63 @@ function SatelliteLayerRow({ layer, enabled, opacity, onToggle, onOpacity }: {
       {/* Unavailable reason */}
       {!isAvailable && layer.unavailable_reason && (
         <div style={{ marginTop: 4, paddingLeft: 42, fontSize: 10, color: '#EF4444' }}>
+          {layer.unavailable_reason}
+        </div>
+      )}
+    </div>
+  );
+}
+// ---- MOSDAC Layer Row (metadata only, no tiles) ---------------------------
+function MOSDACLayerRow({ layer }: { layer: SatelliteLayerSpec }) {
+  const channelInfo = CHANNEL_ICONS[layer.channel] ?? { color: '#6B7280', emoji: '🛰' };
+  const isAvailable = layer.available;
+
+  return (
+    <div style={{
+      padding: '8px 0',
+      borderBottom: '1px solid #F9FAFB',
+      opacity: isAvailable ? 1 : 0.45,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Status indicator */}
+        <div style={{
+          width: 10, height: 10, borderRadius: '50%',
+          background: isAvailable ? '#10B981' : '#E5E7EB',
+          border: `2px solid ${isAvailable ? '#D1FAE5' : '#F3F4F6'}`,
+          flexShrink: 0,
+        }} />
+
+        <span style={{ fontSize: 14 }}>{channelInfo.emoji}</span>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#111827' }}>
+            {layer.display_name}
+          </div>
+          <div style={{ fontSize: 10, color: '#6B7280' }}>
+            {layer.description}
+          </div>
+        </div>
+
+        {/* ISRO badge */}
+        <span style={{
+          fontSize: 8, fontWeight: 700,
+          background: '#FFF7ED',
+          color: '#C2410C',
+          padding: '2px 5px', borderRadius: 3,
+          letterSpacing: '0.05em',
+        }}>
+          ISRO
+        </span>
+      </div>
+
+      {isAvailable && (
+        <div style={{ marginTop: 4, paddingLeft: 26, fontSize: 10, color: '#10B981' }}>
+          ✓ Data available on MOSDAC
+        </div>
+      )}
+
+      {!isAvailable && layer.unavailable_reason && (
+        <div style={{ marginTop: 4, paddingLeft: 26, fontSize: 10, color: '#9CA3AF' }}>
           {layer.unavailable_reason}
         </div>
       )}

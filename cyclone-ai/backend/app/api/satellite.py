@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 from app.providers.satellite import get_satellite_provider
+from app.providers.mosdac import get_mosdac_provider
 
 logger = logging.getLogger("cyclone_ai.api.satellite")
 router = APIRouter(prefix="/api/satellite", tags=["satellite"])
@@ -109,30 +110,64 @@ async def list_satellite_layers(
 
     result = await provider.get_layers(target_date=target_date)
 
+    gibs_layers = [
+        SatelliteLayerResponse(
+            layer_id=l.layer_id,
+            display_name=l.display_name,
+            channel=l.channel,
+            description=l.description,
+            instrument=l.instrument,
+            tile_url=l.tile_url,
+            image_format=l.image_format,
+            default_opacity=l.default_opacity,
+            max_zoom=l.max_zoom,
+            timestamp_utc=l.timestamp_utc,
+            date_label=l.date_label,
+            source=l.source,
+            source_url=l.source_url,
+            available=l.available,
+            unavailable_reason=l.unavailable_reason,
+        )
+        for l in result.layers
+    ]
+
+    # Also fetch MOSDAC layers (non-blocking — don't fail if MOSDAC is slow)
+    mosdac_layers: list[SatelliteLayerResponse] = []
+    mosdac_note = ""
+    try:
+        mosdac = get_mosdac_provider()
+        if mosdac.is_configured:
+            mosdac_result = await mosdac.get_layers(target_date=target_date)
+            mosdac_note = f" | {mosdac_result.note}"
+            for ml in mosdac_result.layers:
+                mosdac_layers.append(SatelliteLayerResponse(
+                    layer_id=ml.layer_id,
+                    display_name=ml.display_name,
+                    channel=ml.channel,
+                    description=ml.description,
+                    instrument=ml.satellite,
+                    tile_url="",  # MOSDAC doesn't serve tiles
+                    image_format="hdf5",
+                    default_opacity=0.7,
+                    max_zoom=6,
+                    timestamp_utc=ml.timestamp_utc,
+                    date_label=ml.date_label,
+                    source=ml.source,
+                    source_url=ml.source_url,
+                    available=ml.available,
+                    unavailable_reason=ml.unavailable_reason,
+                ))
+    except Exception as exc:
+        logger.warning("MOSDAC layer fetch failed (non-fatal): %s", exc)
+        mosdac_note = " | MOSDAC: unavailable"
+
+    all_layers = gibs_layers + mosdac_layers
+
     return SatelliteLayersListResponse(
-        layers=[
-            SatelliteLayerResponse(
-                layer_id=l.layer_id,
-                display_name=l.display_name,
-                channel=l.channel,
-                description=l.description,
-                instrument=l.instrument,
-                tile_url=l.tile_url,
-                image_format=l.image_format,
-                default_opacity=l.default_opacity,
-                max_zoom=l.max_zoom,
-                timestamp_utc=l.timestamp_utc,
-                date_label=l.date_label,
-                source=l.source,
-                source_url=l.source_url,
-                available=l.available,
-                unavailable_reason=l.unavailable_reason,
-            )
-            for l in result.layers
-        ],
+        layers=all_layers,
         retrieved_at_utc=result.retrieved_at_utc,
         gibs_base_url=result.gibs_base_url,
-        note=result.note,
+        note=result.note + mosdac_note,
     )
 
 
