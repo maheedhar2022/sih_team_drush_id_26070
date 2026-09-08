@@ -172,11 +172,13 @@ class SatelliteProvider:
         """
         Build a WMTS tile URL template for MapLibre GL.
 
-        GIBS WMTS URL pattern:
-        {base}/1.0.0/{layer}/default/{date}/GoogleMapsCompatible_Level{zoom}/{z}/{y}/{x}.{format}
+        GIBS WMTS RESTful URL pattern (NO 1.0.0/ version segment):
+        {base}/{layer}/default/{date}/{tileMatrixSet}/{z}/{y}/{x}.{format}
+
+        The date can be a YYYY-MM-DD string or 'default' for latest available.
         """
         return (
-            f"{self.base_url}/1.0.0/{layer.layer_id}/default/"
+            f"{self.base_url}/{layer.layer_id}/default/"
             f"{date_str}/GoogleMapsCompatible_Level{layer.max_zoom}/"
             "{z}/{y}/{x}." + layer.image_format
         )
@@ -225,16 +227,21 @@ class SatelliteProvider:
         now = datetime.now(timezone.utc)
 
         if target_date is None:
-            # Use yesterday — GIBS NRT products typically available by then
-            target_date = now - timedelta(days=1)
-
-        date_str = target_date.strftime("%Y-%m-%d")
-        date_label = target_date.strftime("%d %b %Y")
+            # Use 'default' keyword — GIBS returns the latest available imagery
+            date_str = "default"
+            date_label = "Latest Available"
+        else:
+            date_str = target_date.strftime("%Y-%m-%d")
+            date_label = target_date.strftime("%d %b %Y")
 
         layers: List[SatelliteLayerInfo] = []
 
         for layer_def in GIBS_LAYERS:
-            available, error = await self.check_tile_available(layer_def, date_str)
+            # Skip slow HEAD probes when using 'default' — tiles are always available
+            if date_str == "default":
+                available, error = True, None
+            else:
+                available, error = await self.check_tile_available(layer_def, date_str)
 
             layers.append(SatelliteLayerInfo(
                 layer_id=layer_def.layer_id,
@@ -246,7 +253,7 @@ class SatelliteProvider:
                 image_format=layer_def.image_format,
                 default_opacity=layer_def.default_opacity,
                 max_zoom=layer_def.max_zoom,
-                timestamp_utc=f"{date_str}T00:00:00Z",
+                timestamp_utc=f"{date_str}T00:00:00Z" if date_str != "default" else now.isoformat(),
                 date_label=date_label,
                 source=layer_def.attribution,
                 source_url=self._source_url(layer_def),
