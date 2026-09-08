@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     # An observation is DELAYED if within this many hours (else STALE)
     data_delayed_threshold_hours: int = 24
 
+    # ── Satellite Imagery (Phase 2b) ────────────────────────────────────────
+    satellite_enabled: bool = True
+    gibs_wmts_url: str = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
+    gibs_tile_cache_seconds: int = 3600   # 1h browser cache for proxied tiles
+
     # ── AI ────────────────────────────────────────────────────────────────────
     ai_model_dir: str = "../models"
     ai_device: str = "auto"   # auto | cuda | cpu

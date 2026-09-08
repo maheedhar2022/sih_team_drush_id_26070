@@ -308,7 +308,7 @@ async def get_data_sources() -> list[DataSource]:
 
 
 async def get_last_ingestion_time() -> Optional[datetime]:
-    """Return the most recent processed_at across all observations."""
+    """Return the most recent processed_at across all observations (always UTC-aware)."""
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(CycloneObservation.processed_at_utc)
@@ -316,4 +316,9 @@ async def get_last_ingestion_time() -> Optional[datetime]:
             .limit(1)
         )
         row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        # SQLite returns naive datetimes — normalise to UTC
+        if row.tzinfo is None:
+            return row.replace(tzinfo=timezone.utc)
         return row

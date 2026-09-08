@@ -61,10 +61,11 @@ async def startup_ingest() -> None:
     if last_ingest is None:
         logger.info("[Startup] Database empty — triggering initial ingest...")
         await _run_ingest()
-    elif (now - last_ingest) > threshold:
+    elif (now - last_ingest.replace(tzinfo=timezone.utc if last_ingest.tzinfo is None else last_ingest.tzinfo)) > threshold:
         logger.info(
             "[Startup] Last ingest was %s ago (threshold: %sh) — refreshing...",
-            now - last_ingest, settings.ibtracs_active_refresh_hours
+            now - last_ingest.replace(tzinfo=timezone.utc if last_ingest.tzinfo is None else last_ingest.tzinfo),
+            settings.ibtracs_active_refresh_hours
         )
         await _run_ingest()
     else:

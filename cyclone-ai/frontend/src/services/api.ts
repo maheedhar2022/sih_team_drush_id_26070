@@ -16,6 +16,7 @@ import type {
   DataSourcesResponse,
   ForecastTrack,
   HealthResponse,
+  SatelliteLayersListResponse,
 } from '../types/cyclone';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -99,4 +100,10 @@ export async function fetchForecastTrack(id: string): Promise<ForecastTrack | nu
 /** Fetch the data source registry with provider statuses */
 export async function fetchDataSources(): Promise<DataSourcesResponse> {
   return apiFetch<DataSourcesResponse>('/api/cyclones/sources/list');
+}
+
+/** Fetch available satellite imagery layers */
+export async function fetchSatelliteLayers(date?: string): Promise<SatelliteLayersListResponse> {
+  const params = date ? `?date=${date}` : '';
+  return apiFetch<SatelliteLayersListResponse>(`/api/satellite/layers${params}`);
 }

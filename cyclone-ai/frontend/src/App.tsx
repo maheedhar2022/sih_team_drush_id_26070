@@ -1,13 +1,13 @@
 /**
- * CycloneAI — Root Application (Phase 2)
+ * CycloneAI — Root Application (Phase 2b)
  *
  * Light Theme 2-Column Layout:
  * [ Sidebar (260px) | Map Area (flex-1, containing TopBar) ]
  *
- * Phase 2 changes:
- *  - Passes data_freshness from ActiveCyclonesResponse to TopBar + CycloneMap
- *  - Passes forecastTrack to CycloneMap
- *  - Passes dataSource string to CycloneMap badge
+ * Phase 2b changes:
+ *  - Integrates useSatelliteLayers hook
+ *  - Passes satellite layer state to CycloneMap
+ *  - Layer toggle + opacity callbacks wired through
  */
 import React, { useState } from 'react';
 import { Sidebar }           from './components/Sidebar/Sidebar';
@@ -15,6 +15,7 @@ import { TopBar }            from './components/TopBar/TopBar';
 import { CycloneMap }        from './components/Map/CycloneMap';
 import { useCyclones, useCycloneDetail } from './hooks/useCyclones';
 import { useSystemStatus } from './hooks/useSystemStatus';
+import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 
 const App: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -22,6 +23,16 @@ const App: React.FC = () => {
   const { health }                          = useSystemStatus();
   const { cyclones, loading, error: cyErr, response } = useCyclones();
   const { detail, track, forecastTrack }    = useCycloneDetail(selectedId);
+
+  // Satellite imagery layers (Phase 2b)
+  const {
+    layers: satLayers,
+    enabled: satEnabled,
+    opacities: satOpacities,
+    dateLabel: satDateLabel,
+    toggleLayer: satToggle,
+    setOpacity: satSetOpacity,
+  } = useSatelliteLayers();
 
   const toggle  = (id: string) => setSelectedId(prev => prev === id ? null : id);
   const isDemo  = health?.demo_mode ?? true;
@@ -64,6 +75,13 @@ const App: React.FC = () => {
           dataFreshness={dataFreshness}
           dataSource={dataSource}
           onSelectCyclone={toggle}
+          // Satellite imagery (Phase 2b)
+          satelliteLayers={satLayers}
+          satelliteEnabled={satEnabled}
+          satelliteOpacities={satOpacities}
+          satelliteDateLabel={satDateLabel}
+          onToggleSatelliteLayer={satToggle}
+          onSetSatelliteOpacity={satSetOpacity}
         />
       </div>
     </div>

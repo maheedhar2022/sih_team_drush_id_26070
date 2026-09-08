@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("  Database   : %s", settings.database_url.split("///")[0])
     logger.info("  IBTrACS    : %s", settings.ibtracs_base_url[:60])
     logger.info("  RSMC Bulletin: %s", "enabled" if settings.rsmc_bulletin_enabled else "disabled")
+    logger.info("  Satellite    : %s", "enabled (NASA GIBS)" if settings.satellite_enabled else "disabled")
     logger.info("=" * 60)
 
     # 1. Initialise DB (create tables)

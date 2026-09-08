@@ -137,20 +137,31 @@ export interface DataSourcesResponse {
   retrieved_at_utc: string;
 }
 
-// ---- Satellite Layer Spec (Phase 2b stub) ----------------------------------
+// ---- Satellite Layer (Phase 2b — NASA GIBS) --------------------------------
 
 export interface SatelliteLayerSpec {
-  id: string;
-  name: string;
-  channel: string | null;     // 'VIS' | 'IR' | 'WV'
-  source: string | null;
-  source_url: string | null;
-  timestamp_utc: string | null;
-  tile_url: string | null;
-  bbox: { N: number; S: number; E: number; W: number } | null;
-  opacity: number;
+  layer_id: string;
+  display_name: string;
+  channel: 'VIS' | 'IR' | 'WV';
+  description: string;
+  instrument: string;
+  tile_url: string;             // WMTS URL template with {z}/{y}/{x}
+  image_format: 'png' | 'jpg';
+  default_opacity: number;
+  max_zoom: number;
+  timestamp_utc: string;
+  date_label: string;
+  source: string;
+  source_url: string;
   available: boolean;
   unavailable_reason: string | null;
+}
+
+export interface SatelliteLayersListResponse {
+  layers: SatelliteLayerSpec[];
+  retrieved_at_utc: string;
+  gibs_base_url: string;
+  note: string;
 }
 
 // ---- API Responses ---------------------------------------------------------

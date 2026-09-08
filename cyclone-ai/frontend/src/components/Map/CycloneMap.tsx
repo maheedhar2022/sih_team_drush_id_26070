@@ -1,28 +1,28 @@
 /**
- * CycloneAI — MapLibre GL Map (Light Theme)
+ * CycloneAI — MapLibre GL Map (Phase 2b — Satellite Imagery)
  *
  * Features:
  *  - OSM base map (light, desaturated)
  *  - Historical track: solid dark line + dots
- *  - Compact map legend (OBSERVED / FORECAST / AI PREDICTION)
- *  - Layer control panel (architecture only — no fake satellite data)
- *  - DEMO / HISTORICAL MODE badge
+ *  - Forecast track: dashed blue line
+ *  - ✅ Real satellite imagery layers (NASA GIBS WMTS)
+ *  - Interactive layer panel with toggle + opacity sliders
+ *  - Compact map legend
+ *  - LIVE / HISTORICAL / DEMO mode badge
  *
- * Layer Control Status:
- *  - Base Map (OSM): ✅ active
- *  - Satellite Imagery: ⏳ not yet available
- *  - Infrared (IR): ⏳ not yet available
- *  - Water Vapor (WV): ⏳ not yet available
- *  AI overlay: ⏳ Phase 2
- *
- * NOTE: No fake satellite imagery. No fake AI predictions.
+ * Satellite Layer Support:
+ *  - Visible (VIS): MODIS/VIIRS true-color reflectance
+ *  - Infrared (IR): Cloud-top temperature
+ *  - Water Vapor (WV): Mid-level humidity
+ *  - Source: NASA GIBS (public, no auth required)
+ *  - No fabricated imagery — real tiles with explicit timestamps
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import type { Cyclone, CycloneTrack, DataFreshness, ForecastTrack } from '../../types/cyclone';
+import type { Cyclone, CycloneTrack, DataFreshness, ForecastTrack, SatelliteLayerSpec } from '../../types/cyclone';
 
 // ---- Map style: OSM Light -------------------------------------------------
 const MAP_STYLE: StyleSpecification = {
@@ -42,59 +42,6 @@ const MAP_STYLE: StyleSpecification = {
     { id: 'osm-layer', type: 'raster',     source: 'osm', paint: { 'raster-opacity': 1, 'raster-saturation': -0.5 } },
   ],
 };
-
-// ---- Layer control state type ---------------------------------------------
-interface LayerDef {
-  id: string;
-  label: string;
-  sublabel: string;
-  available: boolean;
-  unavailableReason?: string;
-  opacity: number;          // 0–100, future use
-  source?: string;
-  timestampNote?: string;
-}
-
-const LAYER_DEFS: LayerDef[] = [
-  {
-    id: 'osm',
-    label: 'Base Map',
-    sublabel: 'OpenStreetMap',
-    available: true,
-    opacity: 100,
-    source: 'OpenStreetMap contributors',
-  },
-  {
-    id: 'satellite',
-    label: 'Satellite',
-    sublabel: 'Visible imagery',
-    available: false,
-    unavailableReason: 'Satellite layer — Phase 2',
-    opacity: 80,
-    source: 'Pending: ISRO / NASA MODIS',
-    timestampNote: 'Near-real-time (~2h delay)',
-  },
-  {
-    id: 'infrared',
-    label: 'Infrared (IR)',
-    sublabel: 'Cloud-top temperature',
-    available: false,
-    unavailableReason: 'IR layer — Phase 2',
-    opacity: 70,
-    source: 'Pending: INSAT-3DR',
-    timestampNote: 'Half-hourly composite',
-  },
-  {
-    id: 'water_vapor',
-    label: 'Water Vapor',
-    sublabel: '6.2 µm channel',
-    available: false,
-    unavailableReason: 'WV layer — Phase 2',
-    opacity: 70,
-    source: 'Pending: INSAT-3DR',
-    timestampNote: 'Half-hourly composite',
-  },
-];
 
 // ---- Marker ---------------------------------------------------------------
 function makeMarkerEl(color: string, selected: boolean, label: string): HTMLDivElement {
@@ -143,6 +90,13 @@ function markerColor(cat: string | null | undefined): string {
   return '#3B82F6';
 }
 
+// ---- Channel icons --------------------------------------------------------
+const CHANNEL_ICONS: Record<string, { color: string; emoji: string }> = {
+  VIS: { color: '#F59E0B', emoji: '☀' },
+  IR:  { color: '#EF4444', emoji: '🌡' },
+  WV:  { color: '#3B82F6', emoji: '💧' },
+};
+
 // ---- Component ------------------------------------------------------------
 interface Props {
   cyclones: Cyclone[];
@@ -152,9 +106,22 @@ interface Props {
   dataFreshness?: DataFreshness | null;
   dataSource?: string | null;
   onSelectCyclone: (id: string) => void;
+  // Satellite layer props
+  satelliteLayers?: SatelliteLayerSpec[];
+  satelliteEnabled?: Record<string, boolean>;
+  satelliteOpacities?: Record<string, number>;
+  satelliteDateLabel?: string | null;
+  onToggleSatelliteLayer?: (id: string) => void;
+  onSetSatelliteOpacity?: (id: string, value: number) => void;
 }
 
-export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forecastTrack, dataFreshness, dataSource, onSelectCyclone }) => {
+export const CycloneMap: React.FC<Props> = ({
+  cyclones, selectedId, track, forecastTrack,
+  dataFreshness, dataSource, onSelectCyclone,
+  satelliteLayers = [], satelliteEnabled = {},
+  satelliteOpacities = {}, satelliteDateLabel,
+  onToggleSatelliteLayer, onSetSatelliteOpacity,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<maplibregl.Map | null>(null);
   const markerMap    = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -178,6 +145,52 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forec
     mapRef.current = m;
     return () => { m.remove(); mapRef.current = null; };
   }, []);
+
+  // ---- Satellite layers: add/remove raster sources dynamically ----
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m || !loaded) return;
+
+    for (const layer of satelliteLayers) {
+      const srcId = `sat-src-${layer.layer_id}`;
+      const lyrId = `sat-lyr-${layer.layer_id}`;
+      const isOn = satelliteEnabled[layer.layer_id] && layer.available;
+      const opacity = (satelliteOpacities[layer.layer_id] ?? 70) / 100;
+
+      if (isOn) {
+        // Add source + layer if not present
+        if (!m.getSource(srcId)) {
+          m.addSource(srcId, {
+            type: 'raster',
+            tiles: [layer.tile_url],
+            tileSize: 256,
+            attribution: layer.source,
+            maxzoom: layer.max_zoom,
+          });
+        }
+        if (!m.getLayer(lyrId)) {
+          // Insert satellite layers below track lines (above base map)
+          const beforeLayer = m.getLayer('cyclone-track-line') ? 'cyclone-track-line' : undefined;
+          m.addLayer(
+            {
+              id: lyrId,
+              type: 'raster',
+              source: srcId,
+              paint: { 'raster-opacity': opacity },
+            },
+            beforeLayer,
+          );
+        } else {
+          // Update opacity if layer already exists
+          m.setPaintProperty(lyrId, 'raster-opacity', opacity);
+        }
+      } else {
+        // Remove layer + source if toggled off
+        if (m.getLayer(lyrId)) m.removeLayer(lyrId);
+        if (m.getSource(srcId)) m.removeSource(srcId);
+      }
+    }
+  }, [satelliteLayers, satelliteEnabled, satelliteOpacities, loaded]);
 
   // Draw observed track
   const drawTrack = useCallback(() => {
@@ -278,6 +291,7 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forec
     });
   }, [forecastTrack, loaded]);
 
+  useEffect(() => { drawTrack(); }, [drawTrack]);
   useEffect(() => { drawForecastTrack(); }, [drawForecastTrack]);
 
   // Markers
@@ -325,6 +339,9 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forec
     m.flyTo({ center: [c.longitude, c.latitude], zoom: 5.2, duration: 1200 });
   }, [selectedId, cyclones]);
 
+  // Count active satellite layers
+  const activeSatCount = satelliteLayers.filter(l => satelliteEnabled[l.layer_id] && l.available).length;
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {/* Map canvas */}
@@ -334,7 +351,7 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forec
       <DataModeBadge freshness={dataFreshness ?? 'DEMO'} source={dataSource} />
 
       {/* ── MAP LEGEND ────────────────────────────────────────────────── */}
-      <MapLegend />
+      <MapLegend activeSatCount={activeSatCount} satelliteDateLabel={satelliteDateLabel} />
 
       {/* ── LAYER CONTROL button ──────────────────────────────────────── */}
       <button
@@ -344,31 +361,54 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forec
         style={{
           position: 'absolute', top: 12, right: 12, zIndex: 20,
           background: '#FFFFFF',
-          border: '1px solid #E5E7EB',
+          border: `1px solid ${activeSatCount > 0 ? '#3B82F6' : '#E5E7EB'}`,
           borderRadius: 8,
           padding: '7px 10px',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6,
-          boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+          boxShadow: activeSatCount > 0
+            ? '0 2px 8px rgba(59,130,246,0.2)'
+            : '0 2px 4px rgba(0,0,0,0.08)',
           fontSize: 12,
           fontWeight: 600,
-          color: '#374151',
+          color: activeSatCount > 0 ? '#2563EB' : '#374151',
+          transition: 'all 0.2s ease',
         }}
       >
         <LayerIcon />
         Layers
+        {activeSatCount > 0 && (
+          <span style={{
+            background: '#3B82F6', color: '#FFFFFF',
+            borderRadius: 10, padding: '1px 6px',
+            fontSize: 10, fontWeight: 700, minWidth: 16, textAlign: 'center',
+          }}>
+            {activeSatCount}
+          </span>
+        )}
       </button>
 
       {/* ── LAYER CONTROL PANEL ───────────────────────────────────────── */}
       {layerPanelOpen && (
-        <LayerPanel onClose={() => setLayerPanelOpen(false)} />
+        <LayerPanel
+          onClose={() => setLayerPanelOpen(false)}
+          satelliteLayers={satelliteLayers}
+          satelliteEnabled={satelliteEnabled}
+          satelliteOpacities={satelliteOpacities}
+          satelliteDateLabel={satelliteDateLabel}
+          onToggle={onToggleSatelliteLayer}
+          onOpacity={onSetSatelliteOpacity}
+        />
       )}
     </div>
   );
 };
 
 // ---- Map Legend -----------------------------------------------------------
-function MapLegend() {
+function MapLegend({ activeSatCount, satelliteDateLabel }: {
+  activeSatCount: number;
+  satelliteDateLabel?: string | null;
+}) {
   return (
     <div style={{
       position: 'absolute', bottom: 56, right: 12, zIndex: 10,
@@ -397,7 +437,7 @@ function MapLegend() {
           </div>
         }
         label="Official Forecast"
-        sublabel="Pending — Phase 2"
+        sublabel="RSMC New Delhi"
         unavailable
       />
       <LegendRow
@@ -409,9 +449,30 @@ function MapLegend() {
           </div>
         }
         label="AI Prediction"
-        sublabel="Pending — Phase 2"
+        sublabel="Pending — Phase 3"
         unavailable
       />
+
+      {/* Satellite status indicator */}
+      <div style={{ marginTop: 8, borderTop: '1px solid #F3F4F6', paddingTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            background: activeSatCount > 0 ? '#3B82F6' : '#E5E7EB',
+            border: `2px solid ${activeSatCount > 0 ? '#DBEAFE' : '#F3F4F6'}`,
+            transition: 'all 0.3s ease',
+          }} />
+          <span style={{ fontSize: 11, color: '#374151', fontWeight: 500 }}>
+            Satellite {activeSatCount > 0 ? `(${activeSatCount} active)` : '(off)'}
+          </span>
+        </div>
+        {activeSatCount > 0 && satelliteDateLabel && (
+          <div style={{ fontSize: 10, color: '#6B7280', paddingLeft: 16 }}>
+            Imagery: {satelliteDateLabel}
+          </div>
+        )}
+      </div>
+
       <div style={{ marginTop: 8, borderTop: '1px solid #F3F4F6', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#DC2626', border: '2px solid #FFFFFF', boxShadow: '0 0 0 1px #DC2626' }} />
         <span style={{ fontSize: 11, color: '#374151' }}>Peak intensity</span>
@@ -440,7 +501,16 @@ function LegendRow({ swatch, label, sublabel, unavailable }: {
 }
 
 // ---- Layer Control Panel --------------------------------------------------
-function LayerPanel({ onClose }: { onClose: () => void }) {
+function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpacities,
+  satelliteDateLabel, onToggle, onOpacity }: {
+  onClose: () => void;
+  satelliteLayers: SatelliteLayerSpec[];
+  satelliteEnabled: Record<string, boolean>;
+  satelliteOpacities: Record<string, number>;
+  satelliteDateLabel?: string | null;
+  onToggle?: (id: string) => void;
+  onOpacity?: (id: string, value: number) => void;
+}) {
   return (
     <div style={{
       position: 'absolute', top: 50, right: 12, zIndex: 30,
@@ -449,7 +519,9 @@ function LayerPanel({ onClose }: { onClose: () => void }) {
       borderRadius: 10,
       padding: '14px',
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-      minWidth: 240,
+      minWidth: 280,
+      maxHeight: 'calc(100vh - 120px)',
+      overflowY: 'auto',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#111827', letterSpacing: '0.04em' }}>
@@ -463,8 +535,46 @@ function LayerPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      {LAYER_DEFS.map(layer => (
-        <LayerRow key={layer.id} layer={layer} />
+      {/* Base map */}
+      <LayerRowStatic
+        label="Base Map"
+        sublabel="OpenStreetMap"
+        active={true}
+        source="OpenStreetMap contributors"
+      />
+
+      {/* Satellite layers header */}
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: '#9CA3AF',
+        letterSpacing: '0.08em', margin: '14px 0 8px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span>SATELLITE IMAGERY</span>
+        {satelliteDateLabel && (
+          <span style={{
+            background: '#EEF2FF', color: '#4338CA', padding: '2px 6px',
+            borderRadius: 4, fontSize: 9, fontWeight: 600,
+          }}>
+            {satelliteDateLabel}
+          </span>
+        )}
+      </div>
+
+      {satelliteLayers.length === 0 && (
+        <div style={{ fontSize: 11, color: '#9CA3AF', padding: '8px 0' }}>
+          Loading satellite layers...
+        </div>
+      )}
+
+      {satelliteLayers.map(layer => (
+        <SatelliteLayerRow
+          key={layer.layer_id}
+          layer={layer}
+          enabled={satelliteEnabled[layer.layer_id] ?? false}
+          opacity={satelliteOpacities[layer.layer_id] ?? 70}
+          onToggle={() => onToggle?.(layer.layer_id)}
+          onOpacity={(v) => onOpacity?.(layer.layer_id, v)}
+        />
       ))}
 
       <div style={{
@@ -472,48 +582,133 @@ function LayerPanel({ onClose }: { onClose: () => void }) {
         background: '#F9FAFB', borderRadius: 6,
         fontSize: 10, color: '#9CA3AF', lineHeight: 1.5,
       }}>
-        <strong>Note:</strong> Satellite, IR, and WV layers require live data
-        integration (Phase 2). No fabricated imagery is displayed.
+        <strong>Source:</strong> NASA GIBS (Global Imagery Browse Services).
+        Tiles are near-real-time (~3-5h latency). No fabricated imagery.
       </div>
     </div>
   );
 }
 
-function LayerRow({ layer }: { layer: LayerDef }) {
+function LayerRowStatic({ label, sublabel, active, source }: {
+  label: string; sublabel: string; active: boolean; source: string;
+}) {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
       padding: '8px 0',
       borderBottom: '1px solid #F9FAFB',
-      opacity: layer.available ? 1 : 0.5,
     }}>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{
             width: 12, height: 12, borderRadius: 3,
-            background: layer.available ? '#10B981' : '#E5E7EB',
-            border: `1px solid ${layer.available ? '#059669' : '#D1D5DB'}`,
+            background: active ? '#10B981' : '#E5E7EB',
+            border: `1px solid ${active ? '#059669' : '#D1D5DB'}`,
             flexShrink: 0,
           }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{layer.label}</span>
-          {!layer.available && (
-            <span style={{ fontSize: 9, background: '#F3F4F6', color: '#9CA3AF', padding: '1px 5px', borderRadius: 3, fontWeight: 600 }}>
-              PHASE 2
-            </span>
-          )}
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{label}</span>
         </div>
-        <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2, paddingLeft: 18 }}>{layer.sublabel}</div>
-        {layer.source && (
-          <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1, paddingLeft: 18 }}>
-            Src: {layer.source}
-          </div>
-        )}
-        {layer.timestampNote && (
-          <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1, paddingLeft: 18 }}>
-            {layer.timestampNote}
-          </div>
-        )}
+        <div style={{ fontSize: 10, color: '#6B7280', marginTop: 2, paddingLeft: 18 }}>{sublabel}</div>
+        <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1, paddingLeft: 18 }}>
+          Src: {source}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function SatelliteLayerRow({ layer, enabled, opacity, onToggle, onOpacity }: {
+  layer: SatelliteLayerSpec;
+  enabled: boolean;
+  opacity: number;
+  onToggle: () => void;
+  onOpacity: (v: number) => void;
+}) {
+  const channelInfo = CHANNEL_ICONS[layer.channel] ?? { color: '#6B7280', emoji: '🛰' };
+  const isAvailable = layer.available;
+
+  return (
+    <div style={{
+      padding: '10px 0',
+      borderBottom: '1px solid #F9FAFB',
+      opacity: isAvailable ? 1 : 0.45,
+      transition: 'opacity 0.2s ease',
+    }}>
+      {/* Row header: toggle + name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Toggle switch */}
+        <button
+          onClick={isAvailable ? onToggle : undefined}
+          disabled={!isAvailable}
+          title={isAvailable ? (enabled ? 'Hide layer' : 'Show layer') : (layer.unavailable_reason ?? 'Unavailable')}
+          style={{
+            width: 34, height: 18, borderRadius: 10,
+            border: 'none', cursor: isAvailable ? 'pointer' : 'not-allowed',
+            background: enabled && isAvailable ? '#3B82F6' : '#E5E7EB',
+            position: 'relative',
+            transition: 'background 0.2s ease',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{
+            width: 14, height: 14, borderRadius: '50%',
+            background: '#FFFFFF',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            position: 'absolute', top: 2,
+            left: enabled && isAvailable ? 18 : 2,
+            transition: 'left 0.2s ease',
+          }} />
+        </button>
+
+        {/* Channel icon */}
+        <span style={{ fontSize: 14 }}>{channelInfo.emoji}</span>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>
+            {layer.display_name}
+          </div>
+          <div style={{ fontSize: 10, color: '#6B7280' }}>
+            {layer.instrument}
+          </div>
+        </div>
+
+        {/* Channel badge */}
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          background: `${channelInfo.color}18`,
+          color: channelInfo.color,
+          padding: '2px 6px', borderRadius: 4,
+        }}>
+          {layer.channel}
+        </span>
+      </div>
+
+      {/* Opacity slider — only shown when enabled */}
+      {enabled && isAvailable && (
+        <div style={{ marginTop: 6, paddingLeft: 42, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, color: '#9CA3AF', width: 42 }}>Opacity</span>
+          <input
+            type="range"
+            min={0} max={100}
+            value={opacity}
+            onChange={(e) => onOpacity(Number(e.target.value))}
+            style={{
+              flex: 1, height: 4, cursor: 'pointer',
+              accentColor: '#3B82F6',
+            }}
+          />
+          <span style={{ fontSize: 10, color: '#6B7280', width: 30, textAlign: 'right' }}>
+            {opacity}%
+          </span>
+        </div>
+      )}
+
+      {/* Unavailable reason */}
+      {!isAvailable && layer.unavailable_reason && (
+        <div style={{ marginTop: 4, paddingLeft: 42, fontSize: 10, color: '#EF4444' }}>
+          {layer.unavailable_reason}
+        </div>
+      )}
     </div>
   );
 }
@@ -565,4 +760,3 @@ function DataModeBadge({ freshness, source }: { freshness: string; source?: stri
     </div>
   );
 }
-
