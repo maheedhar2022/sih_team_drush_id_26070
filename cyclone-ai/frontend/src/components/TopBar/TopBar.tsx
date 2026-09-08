@@ -5,11 +5,12 @@
  * Shows: name, wind, pressure, direction, observation timestamp, lat/lon.
  */
 import React from 'react';
-import type { CycloneDetail, HealthResponse } from '../../types/cyclone';
+import type { CycloneDetail, DataFreshness, HealthResponse } from '../../types/cyclone';
 
 interface Props {
   detail: CycloneDetail | null;
   health: HealthResponse | null;
+  dataFreshness?: DataFreshness | null;
 }
 
 // ---- SVG Icon primitives (scientific, no emoji) ---------------------------
@@ -73,7 +74,7 @@ function formatCoord(val: number | null | undefined, axis: 'lat' | 'lon'): strin
 
 // ---- Components ------------------------------------------------------------
 
-export const TopBar: React.FC<Props> = ({ detail, health }) => {
+export const TopBar: React.FC<Props> = ({ detail, health, dataFreshness }) => {
   if (!detail) {
     return (
       <div style={{
@@ -127,11 +128,19 @@ export const TopBar: React.FC<Props> = ({ detail, health }) => {
       {/* Observation metadata row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <MetaRow Icon={IconClock} label={`Obs: ${formatObsTime(detail.last_observation_utc)}`} />
+        {detail.received_at_utc && (
+          <MetaRow Icon={IconClock} label={`Rcv: ${formatObsTime(detail.received_at_utc)}`} />
+        )}
         <MetaRow
           Icon={IconCoords}
           label={`${formatCoord(detail.latitude, 'lat')} ${formatCoord(detail.longitude, 'lon')}`}
         />
       </div>
+
+      <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
+
+      {/* Data freshness badge */}
+      <FreshnessBadge freshness={dataFreshness ?? detail.data_freshness ?? 'DEMO'} />
 
       <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
 
@@ -185,6 +194,31 @@ function StatusBadge({ online }: { online: boolean }) {
       <span style={{ fontSize: 12, fontWeight: 500, color: '#6B7280' }}>
         System {online ? 'Online' : 'Offline'}
       </span>
+    </div>
+  );
+}
+
+const FRESHNESS_STYLES: Record<string, { bg: string; color: string; dot: string }> = {
+  LIVE:       { bg: '#ECFDF5', color: '#065F46', dot: '#10B981' },
+  DELAYED:    { bg: '#FFFBEB', color: '#92400E', dot: '#F59E0B' },
+  STALE:      { bg: '#FEF3C7', color: '#78350F', dot: '#D97706' },
+  HISTORICAL: { bg: '#F3F4F6', color: '#374151', dot: '#6B7280' },
+  DEMO:       { bg: '#EEF2FF', color: '#3730A3', dot: '#6366F1' },
+};
+
+function FreshnessBadge({ freshness }: { freshness: string }) {
+  const style = FRESHNESS_STYLES[freshness] ?? FRESHNESS_STYLES.DEMO;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 5,
+      background: style.bg,
+      borderRadius: 14,
+      padding: '4px 10px',
+      fontSize: 11, fontWeight: 700, color: style.color,
+      letterSpacing: '0.05em',
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: style.dot, display: 'inline-block' }} />
+      {freshness}
     </div>
   );
 }

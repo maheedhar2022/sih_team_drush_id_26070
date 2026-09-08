@@ -1,14 +1,20 @@
 /**
- * CycloneAI — Typed API Client
+ * CycloneAI — Typed API Client (Phase 2)
  *
  * All backend communication goes through this module.
  * Base URL is read from VITE_API_URL env var.
+ *
+ * New in Phase 2:
+ *   fetchForecastTrack() — official RSMC forecast track
+ *   fetchDataSources()   — data source registry
  */
 
 import type {
   ActiveCyclonesResponse,
   CycloneDetail,
   CycloneTrack,
+  DataSourcesResponse,
+  ForecastTrack,
   HealthResponse,
 } from '../types/cyclone';
 
@@ -16,7 +22,7 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 // ---- Generic fetch helper -------------------------------------------------
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public status: number,
     public detail: string,
@@ -36,7 +42,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       ...options,
     });
   } catch (err) {
-    throw new ApiError(0, `Network error: ${String(err)}`);
+    throw new ApiError(0, `Network error — backend may be unreachable: ${String(err)}`);
   }
 
   if (!response.ok) {
@@ -60,7 +66,7 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return apiFetch<HealthResponse>('/api/health');
 }
 
-/** Fetch all active (or demo) cyclone systems */
+/** Fetch all active (or historical) cyclone systems */
 export async function fetchActiveCyclones(): Promise<ActiveCyclonesResponse> {
   return apiFetch<ActiveCyclonesResponse>('/api/cyclones/active');
 }
@@ -75,4 +81,22 @@ export async function fetchCycloneTrack(id: string): Promise<CycloneTrack> {
   return apiFetch<CycloneTrack>(`/api/cyclones/${encodeURIComponent(id)}/track`);
 }
 
-export { ApiError };
+/**
+ * Fetch the official forecast track from RSMC New Delhi.
+ * Returns null if no forecast is available (404 is normal when no active storm).
+ */
+export async function fetchForecastTrack(id: string): Promise<ForecastTrack | null> {
+  try {
+    return await apiFetch<ForecastTrack>(`/api/cyclones/${encodeURIComponent(id)}/forecast`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return null; // no forecast available — expected and OK
+    }
+    throw err;
+  }
+}
+
+/** Fetch the data source registry with provider statuses */
+export async function fetchDataSources(): Promise<DataSourcesResponse> {
+  return apiFetch<DataSourcesResponse>('/api/cyclones/sources/list');
+}

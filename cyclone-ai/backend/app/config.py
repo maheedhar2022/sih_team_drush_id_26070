@@ -1,5 +1,5 @@
 """
-CycloneAI Backend — Application Configuration
+CycloneAI Backend — Application Configuration (Phase 2)
 Reads settings from environment variables / .env file.
 """
 from __future__ import annotations
@@ -18,10 +18,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # General
+    # ── General ──────────────────────────────────────────────────────────────
     app_env: str = "development"
-    demo_mode: bool = True
-    app_version: str = "0.1.0-phase1"
+    app_version: str = "0.2.0-phase2"
+    demo_mode: bool = True   # Falls back to historical if no live data found
 
     # CORS — accepts a comma-separated string or a JSON list
     cors_origins: List[str] = [
@@ -29,21 +29,50 @@ class Settings(BaseSettings):
         "http://localhost:3000",
     ]
 
-    # Database
-    database_url: str = "sqlite:///./cyclone_ai.db"
+    # ── Database ──────────────────────────────────────────────────────────────
+    # SQLite (dev/default): sqlite+aiosqlite:///./cycloneai.db
+    # PostgreSQL (prod):    postgresql+asyncpg://user:pass@host:5432/cycloneai
+    database_url: str = "sqlite+aiosqlite:///./cycloneai.db"
 
-    # Cache (optional)
+    # ── Cache (optional) ─────────────────────────────────────────────────────
     redis_url: str = ""
 
-    # Data sources
-    mosdac_api_key: str = ""
+    # ── IBTrACS Provider ─────────────────────────────────────────────────────
+    # Public NOAA NCEI endpoint — no authentication required
     ibtracs_base_url: str = (
-        "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/"
+        "https://www.ncei.noaa.gov/data/international-best-track-archive"
+        "-for-climate-stewardship-ibtracs/v04r01/access/csv/"
     )
+    ibtracs_active_file: str = "ibtracs.ACTIVE.list.v04r01.csv"
+    ibtracs_ni_file: str = "ibtracs.NI.list.v04r01.csv"
+    # Refresh intervals (hours)
+    ibtracs_active_refresh_hours: int = 6
+    ibtracs_historical_refresh_hours: int = 24
 
-    # AI
+    # ── RSMC Bulletin Scraper ─────────────────────────────────────────────────
+    # Disabled by default — bulletin parsing is fragile (text-based)
+    rsmc_bulletin_enabled: bool = False
+    rsmc_bulletin_url: str = "https://rsmcnewdelhi.imd.gov.in"
+    rsmc_bulletin_refresh_hours: int = 3
+
+    # ── MOSDAC / ISRO ─────────────────────────────────────────────────────────
+    # Requires registered account. Privileged access for NRT data.
+    # Contact: https://www.mosdac.gov.in
+    mosdac_username: str = ""
+    mosdac_password: str = ""
+    mosdac_api_url: str = "https://www.mosdac.gov.in"
+    # Keep legacy key name for backward compat
+    mosdac_api_key: str = ""
+
+    # ── Data Freshness Thresholds ─────────────────────────────────────────────
+    # An observation is LIVE if received within this many hours
+    data_live_threshold_hours: int = 6
+    # An observation is DELAYED if within this many hours (else STALE)
+    data_delayed_threshold_hours: int = 24
+
+    # ── AI ────────────────────────────────────────────────────────────────────
     ai_model_dir: str = "../models"
-    ai_device: str = "auto"  # auto | cuda | cpu
+    ai_device: str = "auto"   # auto | cuda | cpu
 
 
 @lru_cache(maxsize=1)

@@ -1,10 +1,12 @@
 """
-CycloneAI — FastAPI Application Entry Point
+CycloneAI — FastAPI Application Entry Point (Phase 2)
 
-Initializes:
-- CORS middleware (configured from environment)
-- API routers (health + cyclones)
-- Startup/shutdown lifecycle logging
+Startup sequence:
+  1. CORS middleware
+  2. API routers (health + cyclones)
+  3. DB init (create tables if not exist)
+  4. Initial data ingest (if DB empty or stale)
+  5. Background scheduler start
 """
 from __future__ import annotations
 
@@ -18,9 +20,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.config import get_settings
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
@@ -29,33 +28,45 @@ logging.basicConfig(
 logger = logging.getLogger("cyclone_ai")
 
 
-# ---------------------------------------------------------------------------
-# Lifespan (startup / shutdown)
-# ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("=" * 60)
-    logger.info("CycloneAI Backend starting up")
-    logger.info(f"  Version    : {settings.app_version}")
-    logger.info(f"  Environment: {settings.app_env}")
-    logger.info(f"  Demo Mode  : {settings.demo_mode}")
-    logger.info(f"  CORS       : {settings.cors_origins}")
+    logger.info("CycloneAI Backend starting — Phase 2")
+    logger.info("  Version    : %s", settings.app_version)
+    logger.info("  Environment: %s", settings.app_env)
+    logger.info("  Database   : %s", settings.database_url.split("///")[0])
+    logger.info("  IBTrACS    : %s", settings.ibtracs_base_url[:60])
+    logger.info("  RSMC Bulletin: %s", "enabled" if settings.rsmc_bulletin_enabled else "disabled")
     logger.info("=" * 60)
+
+    # 1. Initialise DB (create tables)
+    from app.db.session import init_db
+    await init_db()
+
+    # 2. Startup ingest (fetch from providers if DB is empty/stale)
+    from app.services.scheduler import startup_ingest, start_scheduler
+    await startup_ingest()
+
+    # 3. Start background refresh scheduler
+    start_scheduler()
+
     yield
+
+    # Shutdown
+    from app.services.scheduler import stop_scheduler
+    stop_scheduler()
     logger.info("CycloneAI Backend shutting down.")
 
 
-# ---------------------------------------------------------------------------
-# Application
-# ---------------------------------------------------------------------------
 settings = get_settings()
 
 app = FastAPI(
     title="CycloneAI API",
     description=(
         "Real-Time AI-Based Tropical Cyclone Monitoring, Analysis, "
-        "Classification and Prediction Platform — API"
+        "Classification and Prediction Platform — Phase 2 API\n\n"
+        "Data sources: IBTrACS v04r01 (NOAA NCEI), IMD/RSMC New Delhi"
     ),
     version=settings.app_version,
     docs_url="/api/docs",
@@ -64,9 +75,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ---------------------------------------------------------------------------
-# CORS
-# ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -75,20 +83,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
 app.include_router(api_router)
 
 
-# ---------------------------------------------------------------------------
-# Root redirect info
-# ---------------------------------------------------------------------------
 @app.get("/", include_in_schema=False)
 async def root() -> dict:
     return {
         "service": "CycloneAI API",
         "version": settings.app_version,
+        "phase": "2 — Data Ingestion",
         "docs": "/api/docs",
         "health": "/api/health",
+        "sources": "/api/cyclones/sources/list",
     }

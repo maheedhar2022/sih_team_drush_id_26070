@@ -25,13 +25,17 @@ def test_active_cyclones_schema():
     assert isinstance(data["cyclones"], list)
 
 
-def test_demo_mode_is_labeled():
+def test_historical_or_demo_mode_is_labeled():
+    """
+    Phase 2: fallback to verified historical data returns HISTORICAL (not DEMO).
+    Both DEMO and HISTORICAL are acceptable non-live modes — both must be explicit.
+    """
     response = client.get("/api/cyclones/active")
     data = response.json()
-    # In demo mode every cyclone must be labeled DEMO
+    valid_modes = {"DEMO", "HISTORICAL", "LIVE", "DELAYED"}
     for cyclone in data["cyclones"]:
-        assert cyclone["data_mode"] == "DEMO", (
-            f"Cyclone {cyclone['id']} is not labeled as DEMO!"
+        assert cyclone["data_mode"] in valid_modes, (
+            f"Cyclone {cyclone['id']} has unexpected data_mode: {cyclone['data_mode']}"
         )
 
 

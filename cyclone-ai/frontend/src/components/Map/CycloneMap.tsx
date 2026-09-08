@@ -22,7 +22,7 @@ import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import type { Cyclone, CycloneTrack } from '../../types/cyclone';
+import type { Cyclone, CycloneTrack, DataFreshness, ForecastTrack } from '../../types/cyclone';
 
 // ---- Map style: OSM Light -------------------------------------------------
 const MAP_STYLE: StyleSpecification = {
@@ -148,10 +148,13 @@ interface Props {
   cyclones: Cyclone[];
   selectedId: string | null;
   track: CycloneTrack | null;
+  forecastTrack: ForecastTrack | null;
+  dataFreshness?: DataFreshness | null;
+  dataSource?: string | null;
   onSelectCyclone: (id: string) => void;
 }
 
-export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, onSelectCyclone }) => {
+export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, forecastTrack, dataFreshness, dataSource, onSelectCyclone }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<maplibregl.Map | null>(null);
   const markerMap    = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -247,7 +250,35 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, onSel
     }
   }, [track, loaded]);
 
-  useEffect(() => { drawTrack(); }, [drawTrack]);
+  // Draw official forecast track (dashed line)
+  const drawForecastTrack = useCallback(() => {
+    const m = mapRef.current;
+    if (!m || !loaded) return;
+    ['cyclone-forecast-line'].forEach(id => {
+      if (m.getLayer(id)) m.removeLayer(id);
+    });
+    ['cyclone-forecast'].forEach(id => {
+      if (m.getSource(id)) m.removeSource(id);
+    });
+    if (!forecastTrack || forecastTrack.points.length < 2) return;
+    const coords = forecastTrack.points.map(p => [p.longitude, p.latitude]);
+    m.addSource('cyclone-forecast', {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} },
+    });
+    m.addLayer({
+      id: 'cyclone-forecast-line', type: 'line', source: 'cyclone-forecast',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': '#2563EB',
+        'line-width': 2,
+        'line-opacity': 0.75,
+        'line-dasharray': [4, 3],
+      },
+    });
+  }, [forecastTrack, loaded]);
+
+  useEffect(() => { drawForecastTrack(); }, [drawForecastTrack]);
 
   // Markers
   useEffect(() => {
@@ -299,22 +330,8 @@ export const CycloneMap: React.FC<Props> = ({ cyclones, selectedId, track, onSel
       {/* Map canvas */}
       <div ref={containerRef} style={{ width: '100%', height: '100%', background: '#F3F4F6' }} />
 
-      {/* ── DEMO / HISTORICAL MODE badge ──────────────────────────────── */}
-      <div style={{
-        position: 'absolute', bottom: 56, left: 12, zIndex: 10,
-        background: '#92400E',
-        color: '#FEF3C7',
-        borderRadius: 6,
-        padding: '4px 10px',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        fontFamily: "'Roboto Mono', monospace",
-        pointerEvents: 'none',
-        userSelect: 'none',
-      }}>
-        HISTORICAL / DEMO — AMPHAN 2020 (IMD/RSMC)
-      </div>
+      {/* ── DATA MODE badge — dynamic (LIVE / HISTORICAL / DEMO) ──────── */}
+      <DataModeBadge freshness={dataFreshness ?? 'DEMO'} source={dataSource} />
 
       {/* ── MAP LEGEND ────────────────────────────────────────────────── */}
       <MapLegend />
@@ -511,3 +528,41 @@ function LayerIcon() {
     </svg>
   );
 }
+
+// ---- Data Mode Badge -------------------------------------------------------
+const BADGE_STYLES: Record<string, { bg: string; color: string; border: string }> = {
+  LIVE:       { bg: '#ECFDF5', color: '#065F46', border: '#6EE7B7' },
+  DELAYED:    { bg: '#FFFBEB', color: '#92400E', border: '#FCD34D' },
+  STALE:      { bg: '#FEF3C7', color: '#78350F', border: '#FDE68A' },
+  HISTORICAL: { bg: '#F3F4F6', color: '#374151', border: '#D1D5DB' },
+  DEMO:       { bg: '#EEF2FF', color: '#3730A3', border: '#C7D2FE' },
+};
+
+function DataModeBadge({ freshness, source }: { freshness: string; source?: string | null }) {
+  const s = BADGE_STYLES[freshness] ?? BADGE_STYLES.DEMO;
+  return (
+    <div style={{
+      position: 'absolute', bottom: 56, left: 12, zIndex: 10,
+      background: s.bg,
+      border: `1px solid ${s.border}`,
+      color: s.color,
+      borderRadius: 6,
+      padding: '4px 10px',
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      fontFamily: "'Roboto Mono', monospace",
+      pointerEvents: 'none',
+      userSelect: 'none',
+      maxWidth: 300,
+    }}>
+      {freshness}
+      {source && (
+        <div style={{ fontWeight: 400, letterSpacing: 0, marginTop: 1, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {source}
+        </div>
+      )}
+    </div>
+  );
+}
+
