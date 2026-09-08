@@ -1,6 +1,7 @@
 /**
  * CycloneAI — Sidebar
- * Full-height light sidebar inspired by modern map apps.
+ * Full-height light sidebar.
+ * Icons: inline SVG only (no emoji).
  */
 import React from 'react';
 import type { Cyclone } from '../../types/cyclone';
@@ -13,6 +14,52 @@ interface Props {
   error: string | null;
   demoMode: boolean;
 }
+
+// ---- SVG Icon set (scientific / UI — no emoji) ----------------------------
+
+const IconMonitor = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+    <line x1="8" y1="21" x2="16" y2="21"/>
+    <line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+);
+
+const IconArchive = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="21 8 21 21 3 21 3 8"/>
+    <rect x="1" y="3" width="22" height="5"/>
+    <line x1="10" y1="12" x2="14" y2="12"/>
+  </svg>
+);
+
+const IconLab = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11l-4 4h14l-4-4V3"/>
+  </svg>
+);
+
+const IconInfo = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="16" x2="12" y2="12"/>
+    <line x1="12" y1="8" x2="12.01" y2="8"/>
+  </svg>
+);
+
+// Spiral / cyclone icon using SVG path (no emoji)
+const IconCyclone = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" stroke="#FFFFFF" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a10 10 0 1 0 0 20"/>
+    <path d="M12 8a4 4 0 1 0 0 8"/>
+    <path d="M12 12h.01"/>
+    {/* spiral arcs */}
+    <path d="M12 4c4.4 0 8 3.6 8 8"/>
+    <path d="M12 7c2.8 0 5 2.2 5 5"/>
+  </svg>
+);
+
+// ---- Component ------------------------------------------------------------
 
 export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loading, error, demoMode }) => {
   return (
@@ -30,11 +77,11 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
         <div style={{
           width: 32, height: 32,
           background: '#111827',
-          color: '#FFFFFF',
           borderRadius: 8,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 16,
-        }}>🌀</div>
+        }}>
+          <IconCyclone />
+        </div>
         <div style={{ fontSize: 18, fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>
           CycloneAI
         </div>
@@ -42,10 +89,10 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
 
       {/* Navigation Links */}
       <nav style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <NavItem icon="📍" label="Monitor" active />
-        <NavItem icon="🕰️" label="Archive" />
-        <NavItem icon="🧪" label="AI Lab" />
-        <NavItem icon="ℹ️" label="About" />
+        <NavItem Icon={IconMonitor} label="Monitor" active />
+        <NavItem Icon={IconArchive} label="Archive" />
+        <NavItem Icon={IconLab}     label="AI Lab" />
+        <NavItem Icon={IconInfo}    label="About" />
       </nav>
 
       {/* Divider */}
@@ -102,7 +149,7 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
         })}
       </div>
 
-      {/* Promo/Disclaimer Area (Bottom) */}
+      {/* Mode indicator (bottom) */}
       <div style={{ padding: '20px' }}>
         <div style={{
           background: demoMode ? '#FEF3C7' : '#F3F4F6',
@@ -110,15 +157,15 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
           padding: '16px',
         }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: demoMode ? '#92400E' : '#111827', marginBottom: 4 }}>
-            {demoMode ? 'Historical Demo Mode' : 'Live Data Mode'}
+            {demoMode ? 'Historical / Demo Mode' : 'Live Data Mode'}
           </div>
           <div style={{ fontSize: 11, color: demoMode ? '#B45309' : '#4B5563', lineHeight: 1.4 }}>
-            {demoMode 
-              ? 'Displaying 2020 Cyclone AMPHAN data for demonstration purposes.' 
+            {demoMode
+              ? 'Displaying verified historical data: AMPHAN 2020 (IMD/RSMC).'
               : 'AI analysis is experimental. Follow official IMD warnings.'}
           </div>
         </div>
-        
+
         <div style={{ marginTop: 16, display: 'flex', gap: 12, fontSize: 11, color: '#9CA3AF' }}>
           <span>Terms</span>
           <span>Privacy</span>
@@ -129,7 +176,7 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
   );
 };
 
-function NavItem({ icon, label, active }: { icon: string; label: string; active?: boolean }) {
+function NavItem({ Icon, label, active }: { Icon: React.FC; label: string; active?: boolean }) {
   return (
     <button style={{
       display: 'flex', alignItems: 'center', gap: 12,
@@ -143,7 +190,7 @@ function NavItem({ icon, label, active }: { icon: string; label: string; active?
       fontWeight: active ? 600 : 500,
       fontSize: 14,
     }}>
-      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ display: 'flex', alignItems: 'center' }}><Icon /></span>
       <span>{label}</span>
     </button>
   );

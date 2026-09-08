@@ -1,6 +1,8 @@
 /**
  * CycloneAI — TopBar
  * Floating pill-shaped top bar showing selected cyclone details.
+ * Icons: inline SVG only (no emoji).
+ * Shows: name, wind, pressure, direction, observation timestamp, lat/lon.
  */
 import React from 'react';
 import type { CycloneDetail, HealthResponse } from '../../types/cyclone';
@@ -9,6 +11,67 @@ interface Props {
   detail: CycloneDetail | null;
   health: HealthResponse | null;
 }
+
+// ---- SVG Icon primitives (scientific, no emoji) ---------------------------
+
+const IconWind = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+    <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+    <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
+  </svg>
+);
+
+const IconPressure = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const IconDirection = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+  </svg>
+);
+
+const IconClock = () => (
+  <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const IconCoords = () => (
+  <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <line x1="12" y1="2" x2="12" y2="6"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+    <line x1="2" y1="12" x2="6" y2="12"/>
+    <line x1="18" y1="12" x2="22" y2="12"/>
+  </svg>
+);
+
+// ---- Helpers ---------------------------------------------------------------
+
+function formatObsTime(iso: string | null | undefined): string {
+  if (!iso) return '--';
+  try {
+    const d = new Date(iso);
+    return d.toISOString().replace('T', ' ').replace('.000Z', 'Z');
+  } catch {
+    return '--';
+  }
+}
+
+function formatCoord(val: number | null | undefined, axis: 'lat' | 'lon'): string {
+  if (val == null) return '--';
+  const abs = Math.abs(val).toFixed(2);
+  if (axis === 'lat') return `${abs}°${val >= 0 ? 'N' : 'S'}`;
+  return `${abs}°${val >= 0 ? 'E' : 'W'}`;
+}
+
+// ---- Components ------------------------------------------------------------
 
 export const TopBar: React.FC<Props> = ({ detail, health }) => {
   if (!detail) {
@@ -38,54 +101,79 @@ export const TopBar: React.FC<Props> = ({ detail, health }) => {
       borderRadius: 24,
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1)',
       padding: '8px 12px 8px 24px',
-      display: 'flex', alignItems: 'center', gap: 16,
+      display: 'flex', alignItems: 'center', gap: 14,
       border: '1px solid #E5E7EB',
+      flexWrap: 'wrap',
     }}>
-      {/* Name and Status */}
+      {/* Name + active dot */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{detail.name}</span>
         {detail.status === 'ACTIVE' && (
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444' }} />
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} />
         )}
       </div>
 
       <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
 
-      {/* Info Chips */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <Chip icon="💨" label={`${detail.wind_speed_kmh ?? '--'} km/h`} />
-        <Chip icon="⏱️" label={`${detail.pressure_hpa ?? '--'} hPa`} />
-        <Chip icon="🧭" label={detail.movement_direction ?? '--'} />
+      {/* Meteorological chips */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <Chip Icon={IconWind}      label={`${detail.wind_speed_kmh ?? '--'} km/h`} />
+        <Chip Icon={IconPressure}  label={`${detail.pressure_hpa ?? '--'} hPa`} />
+        <Chip Icon={IconDirection} label={detail.movement_direction ?? '--'} />
       </div>
 
       <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
 
-      {/* AI Button */}
-      <button style={{
-        background: '#111827', color: '#FFFFFF',
-        border: 'none', borderRadius: 20,
-        padding: '8px 16px',
-        fontSize: 13, fontWeight: 500,
-        cursor: 'pointer',
-      }}>
-        View AI Analysis
+      {/* Observation metadata row */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <MetaRow Icon={IconClock} label={`Obs: ${formatObsTime(detail.last_observation_utc)}`} />
+        <MetaRow
+          Icon={IconCoords}
+          label={`${formatCoord(detail.latitude, 'lat')} ${formatCoord(detail.longitude, 'lon')}`}
+        />
+      </div>
+
+      <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
+
+      {/* AI button (placeholder — not yet implemented) */}
+      <button
+        disabled
+        title="AI Analysis coming in Phase 2"
+        style={{
+          background: '#F3F4F6', color: '#9CA3AF',
+          border: '1px solid #E5E7EB', borderRadius: 20,
+          padding: '8px 16px',
+          fontSize: 13, fontWeight: 500,
+          cursor: 'not-allowed',
+        }}
+      >
+        AI Analysis
       </button>
     </div>
   );
 };
 
-function Chip({ icon, label }: { icon: string; label: string }) {
+function Chip({ Icon, label }: { Icon: React.FC; label: string }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+      display: 'flex', alignItems: 'center', gap: 5,
       background: '#F9FAFB',
       border: '1px solid #F3F4F6',
       borderRadius: 16,
-      padding: '6px 12px',
-      fontSize: 13, fontWeight: 500, color: '#4B5563',
+      padding: '5px 11px',
+      fontSize: 13, fontWeight: 500, color: '#374151',
     }}>
-      <span>{icon}</span>
+      <span style={{ color: '#6B7280', display: 'flex', alignItems: 'center' }}><Icon /></span>
       <span>{label}</span>
+    </div>
+  );
+}
+
+function MetaRow({ Icon, label }: { Icon: React.FC; label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6B7280' }}>
+      <span style={{ display: 'flex', alignItems: 'center' }}><Icon /></span>
+      <span style={{ fontFamily: "'Roboto Mono', 'Courier New', monospace" }}>{label}</span>
     </div>
   );
 }
@@ -93,7 +181,7 @@ function Chip({ icon, label }: { icon: string; label: string }) {
 function StatusBadge({ online }: { online: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: online ? '#10B981' : '#EF4444' }} />
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: online ? '#10B981' : '#EF4444', display: 'inline-block' }} />
       <span style={{ fontSize: 12, fontWeight: 500, color: '#6B7280' }}>
         System {online ? 'Online' : 'Offline'}
       </span>
