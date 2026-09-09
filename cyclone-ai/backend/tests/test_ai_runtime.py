@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-torch = pytest.importorskip("torch")
-pytest.importorskip("torchvision")
-Image = pytest.importorskip("PIL.Image")
+try:
+    import torch
+    import torchvision  # noqa: F401
+    from PIL import Image
+except Exception as exc:  # Native ML libraries can fail to initialise on unsupported Python builds.
+    pytest.skip(f"PyTorch/Torchvision runtime is unavailable: {exc}", allow_module_level=True)
 
 from ai.detection.config import DetectionConfig
 from ai.detection.model import build_model

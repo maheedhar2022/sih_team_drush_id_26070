@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-torch = pytest.importorskip("torch")
-pytest.importorskip("torchvision")
+try:
+    import torch
+    import torchvision  # noqa: F401
+except Exception as exc:  # Native ML libraries can fail to initialise on unsupported Python builds.
+    pytest.skip(f"PyTorch/Torchvision runtime is unavailable: {exc}", allow_module_level=True)
 
 from ai.intensity.config import IntensityConfig
 from ai.intensity.model import build_model

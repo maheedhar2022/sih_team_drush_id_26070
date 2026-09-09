@@ -25,9 +25,8 @@ export function useAiIntensity() {
   const run = useCallback(async (file: File, source: string = 'user_upload') => {
     setState({ phase: 'loading' });
     try {
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      const result = await fetchAiIntensity(bytes, file.type, source);
+      const imageBytes = await file.arrayBuffer();
+      const result = await fetchAiIntensity(imageBytes, file.type, source);
       setState({ phase: 'success', result });
     } catch (err) {
       const message =

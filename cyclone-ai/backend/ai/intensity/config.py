@@ -7,6 +7,8 @@ from typing import Any
 
 
 SUPPORTED_BACKBONES = {"resnet18", "resnet50"}
+SUPPORTED_OPTIMIZERS = {"adamw", "sgd"}
+SUPPORTED_SCHEDULERS = {"plateau", "none"}
 
 
 @dataclass(frozen=True)
@@ -25,10 +27,16 @@ class IntensityConfig:
     timestamp_tolerance_minutes: int = 30
     wind_loss_weight: float = 1.0
     pressure_loss_weight: float = 1.0
+    optimizer: str = "adamw"
+    scheduler: str = "plateau"
 
     def __post_init__(self) -> None:
         if self.backbone not in SUPPORTED_BACKBONES:
             raise ValueError(f"backbone must be one of {sorted(SUPPORTED_BACKBONES)}")
+        if self.optimizer not in SUPPORTED_OPTIMIZERS:
+            raise ValueError(f"optimizer must be one of {sorted(SUPPORTED_OPTIMIZERS)}")
+        if self.scheduler not in SUPPORTED_SCHEDULERS:
+            raise ValueError(f"scheduler must be one of {sorted(SUPPORTED_SCHEDULERS)}")
         if self.image_size < 32 or self.batch_size < 1 or self.epochs < 1 or self.patience < 1:
             raise ValueError("image_size, batch_size, epochs, and patience must be positive")
         if self.learning_rate <= 0 or self.wind_loss_weight < 0 or self.pressure_loss_weight < 0:

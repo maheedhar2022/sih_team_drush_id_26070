@@ -78,7 +78,7 @@ class DetectionService:
             import torch  # noqa: F401
             import torchvision  # noqa: F401
             import PIL  # noqa: F401
-        except ImportError:
+        except Exception:
             return DetectionStatus(
                 status="DEPENDENCY_UNAVAILABLE",
                 model_version=None,

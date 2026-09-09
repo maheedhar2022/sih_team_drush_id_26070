@@ -257,11 +257,13 @@ try:
     import PIL as _pil  # noqa: F401
     _HAS_TORCH = True
 except Exception:
+    _torch = None
     _HAS_TORCH = False
 
 _skip_no_torch = pytest.mark.skipif(not _HAS_TORCH, reason="torch/torchvision/Pillow not available")
 
 
+@_skip_no_torch
 class TestPreprocessing:
     def _minimal_jpeg_bytes(self) -> bytes:
         """Return a 4×4 px white JPEG created with Pillow."""
@@ -312,6 +314,7 @@ class TestPreprocessing:
 # Model creation (no pretrained weights — fast, no internet)
 # ═══════════════════════════════════════════════════════════════════════════
 
+@_skip_no_torch
 class TestModelCreation:
     def test_resnet18_with_all_heads(self):
         from ai.intensity.model import build_model
@@ -362,6 +365,7 @@ class TestModelCreation:
 # Checkpoint round-trip on CPU
 # ═══════════════════════════════════════════════════════════════════════════
 
+@_skip_no_torch
 class TestCheckpointRoundTrip:
     def _build_and_save(self, tmp_path: Path) -> Path:
         from ai.intensity.model import build_model
@@ -429,7 +433,7 @@ class TestCheckpointRoundTrip:
         assert abs(total - 1.0) < 1e-5
 
     @pytest.mark.skipif(
-        not (hasattr(torch, "cuda") and torch.cuda.is_available()),
+        not (_torch is not None and _torch.cuda.is_available()),
         reason="CUDA is not available",
     )
     def test_cuda_inference(self, tmp_path):
@@ -586,6 +590,25 @@ async def test_intensity_api_success_returns_full_result(monkeypatch, tmp_path):
     assert body["model_version"] == "intensity-resnet18-v1"
     assert body["observation_id"] == "OBS_001"
     assert "class_probabilities" in body
+
+
+@pytest.mark.asyncio
+async def test_intensity_api_returns_structured_inference_error(monkeypatch):
+    class StubFailingService:
+        def status(self):
+            from ai.intensity.service import IntensityStatus
+            return IntensityStatus("READY", "CONFIGURED", "v1", "resnet18", "test-v1", None)
+
+        def predict_image(self, image_bytes, *, source, observation_id=None):
+            raise RuntimeError("unexpected model failure")
+
+    monkeypatch.setattr("app.api.ai.get_intensity_service", lambda: StubFailingService())
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/ai/intensity?source=unit_test", content=b"image", headers={"Content-Type": "image/jpeg"},
+        )
+    assert response.status_code == 500
+    assert response.json()["status"] == "INFERENCE_ERROR"
 
 
 # ═══════════════════════════════════════════════════════════════════════════

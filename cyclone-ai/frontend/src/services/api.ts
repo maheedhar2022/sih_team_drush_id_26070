@@ -146,7 +146,7 @@ export async function fetchAiIntensityStatus(): Promise<AiIntensityStatus> {
  * UI can display the correct model-unavailable state.
  */
 export async function fetchAiIntensity(
-  imageBytes: Uint8Array,
+  imageBytes: ArrayBuffer,
   contentType: string,
   source: string,
   observationId?: string,

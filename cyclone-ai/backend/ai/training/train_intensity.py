@@ -132,8 +132,14 @@ def train(config: IntensityConfig, *, manifest_path: Path, label_mapping_path: P
     model = build_model(config, num_categories=len(labels), predict_wind=predict_wind, predict_pressure=predict_pressure, use_pretrained_weights=config.pretrained).to(device)
     category_loss = torch.nn.CrossEntropyLoss()
     regression_loss = torch.nn.SmoothL1Loss(reduction="none")
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
+    if config.optimizer == "adamw":
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
+    else:
+        optimizer = torch.optim.SGD(model.parameters(), lr=config.learning_rate, momentum=0.9, weight_decay=config.weight_decay)
+    scheduler = (
+        torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=2, factor=0.5)
+        if config.scheduler == "plateau" else None
+    )
     use_amp = device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
@@ -179,7 +185,9 @@ def train(config: IntensityConfig, *, manifest_path: Path, label_mapping_path: P
                 output = model(images); loss = batch_loss(output, categories, wind, wind_mask, pressure, pressure_mask)
             scaler.scale(loss).backward(); scaler.step(optimizer); scaler.update()
             training_loss += float(loss.item()) * len(categories); seen += len(categories)
-        validation_loss, validation_metrics = evaluate(val_loader); scheduler.step(validation_loss)
+        validation_loss, validation_metrics = evaluate(val_loader)
+        if scheduler is not None:
+            scheduler.step(validation_loss)
         history.append({"epoch": epoch, "training_loss": training_loss / max(seen, 1), "validation_loss": validation_loss, "validation_metrics": validation_metrics, "learning_rate": optimizer.param_groups[0]["lr"]})
         checkpoint = {"state_dict": model.state_dict(), "config": config.to_dict(), "model_version": model_version, "label_mapping": label_mapping, "predict_wind": predict_wind, "predict_pressure": predict_pressure, "target_statistics": target_statistics, "dataset_report": dataset_report, "trained_at_utc": datetime.now(timezone.utc).isoformat()}
         torch.save(checkpoint, output_dir / "last.pt")
@@ -196,9 +204,9 @@ def train(config: IntensityConfig, *, manifest_path: Path, label_mapping_path: P
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train CycloneAI's event-split intensity baseline")
-    parser.add_argument("--manifest", type=Path, required=True); parser.add_argument("--label-mapping", type=Path, required=True); parser.add_argument("--output-dir", type=Path, default=Path("../models/intensity")); parser.add_argument("--backbone", choices=("resnet18", "resnet50"), default="resnet18"); parser.add_argument("--epochs", type=int, default=20); parser.add_argument("--batch-size", type=int, default=16); parser.add_argument("--learning-rate", type=float, default=1e-4); parser.add_argument("--image-size", type=int, default=224); parser.add_argument("--seed", type=int, default=42); parser.add_argument("--dataset-version", required=True); parser.add_argument("--dataset-source", required=True); parser.add_argument("--timestamp-tolerance-minutes", type=int, default=30); parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto"); parser.add_argument("--no-pretrained", action="store_true")
+    parser.add_argument("--manifest", type=Path, required=True); parser.add_argument("--label-mapping", type=Path, required=True); parser.add_argument("--output-dir", type=Path, default=Path("../models/intensity")); parser.add_argument("--backbone", choices=("resnet18", "resnet50"), default="resnet18"); parser.add_argument("--epochs", type=int, default=20); parser.add_argument("--batch-size", type=int, default=16); parser.add_argument("--learning-rate", type=float, default=1e-4); parser.add_argument("--weight-decay", type=float, default=1e-4); parser.add_argument("--optimizer", choices=("adamw", "sgd"), default="adamw"); parser.add_argument("--scheduler", choices=("plateau", "none"), default="plateau"); parser.add_argument("--wind-loss-weight", type=float, default=1.0); parser.add_argument("--pressure-loss-weight", type=float, default=1.0); parser.add_argument("--patience", type=int, default=5); parser.add_argument("--image-size", type=int, default=224); parser.add_argument("--seed", type=int, default=42); parser.add_argument("--dataset-version", required=True); parser.add_argument("--dataset-source", required=True); parser.add_argument("--timestamp-tolerance-minutes", type=int, default=30); parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto"); parser.add_argument("--no-pretrained", action="store_true")
     args = parser.parse_args()
-    config = IntensityConfig(backbone=args.backbone, image_size=args.image_size, batch_size=args.batch_size, epochs=args.epochs, learning_rate=args.learning_rate, seed=args.seed, dataset_version=args.dataset_version, dataset_source=args.dataset_source, timestamp_tolerance_minutes=args.timestamp_tolerance_minutes, pretrained=not args.no_pretrained)
+    config = IntensityConfig(backbone=args.backbone, image_size=args.image_size, batch_size=args.batch_size, epochs=args.epochs, learning_rate=args.learning_rate, weight_decay=args.weight_decay, optimizer=args.optimizer, scheduler=args.scheduler, wind_loss_weight=args.wind_loss_weight, pressure_loss_weight=args.pressure_loss_weight, patience=args.patience, seed=args.seed, dataset_version=args.dataset_version, dataset_source=args.dataset_source, timestamp_tolerance_minutes=args.timestamp_tolerance_minutes, pretrained=not args.no_pretrained)
     print(json.dumps(train(config, manifest_path=args.manifest, label_mapping_path=args.label_mapping, output_dir=args.output_dir, device_name=args.device), indent=2))
 
 

@@ -24,7 +24,8 @@ Backend:
 
 ```bash
 cd backend
-python -m venv .venv
+# Python 3.12 is required by the pinned PyTorch 2.5 / Torchvision 0.20 stack.
+py -3.12 -m venv .venv
 .venv\\Scripts\\activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000

@@ -72,10 +72,11 @@ curl -L "https://www.ncei.noaa.gov/data/international-best-track-archive-for-cli
   -o data/cyclone_intensity/ibtracs_NI.csv
 ```
 
-IBTrACS provides: storm ID, name, timestamp (every 3 or 6 hours), latitude, longitude,
-USA_WIND (kt), WMO_PRES (hPa), and nature codes. Convert wind to km/h (×1.852).
+IBTrACS provides storm IDs, timestamps, locations, and agency-specific wind and
+pressure fields. The builder uses only New Delhi/IMD-compatible 3-minute wind
+observations when constructing an IMD intensity label.
 
-### Step 2 — Map IBTrACS nature codes to IMD categories
+### Step 2 — Use IMD/New Delhi wind observations only
 
 IMD intensity scale based on 3-min sustained surface wind:
 
@@ -89,14 +90,19 @@ IMD intensity scale based on 3-min sustained surface wind:
 | Extremely Severe Cyclonic Storm | 167–220 km/h |
 | Super Cyclonic Storm | ≥ 221 km/h |
 
-Derive the category from `USA_WIND` × 1.852 (or `WMO_WIND` if USA_WIND is absent).
-Only retain rows with a valid wind value and a known category.
+Use `NEWDELHI_WIND` / `NEW_WIND`. These are compatible with the IMD 3-minute
+scale. `USA_WIND` is a 1-minute wind and must not be silently converted into an
+IMD label. `WMO_WIND` is accepted only when `WMO_AGENCY` identifies New Delhi
+or IMD.
 
 ### Step 3 — Download matching satellite imagery
 
-#### Option A — NASA GIBS (public, no auth, Moderate Resolution Imaging Spectroradiometer)
+#### Option A — NASA GIBS (public visual reference)
 
-For each IBTrACS record, fetch the nearest MODIS or VIIRS image:
+GIBS daily mosaics are useful for visual review, but their daily timestamp is
+not an acquisition time precise enough for the default 30-minute label-alignment
+requirement. Do not use a GIBS daily tile as a training sample without the
+source granule's actual UTC acquisition time in the satellite catalog.
 
 ```python
 # Example: MODIS Corrected Reflectance True Color (1 km, daily)
@@ -106,9 +112,9 @@ date  = "2020-05-20"  # match IBTrACS timestamp date
 # Then clip to a 512×512 px box centred on the storm eye
 ```
 
-A helper script template is provided at:
-`backend/ai/training/download_gibs_images.py` (create this based on the
-GIBS WMTS REST API).
+Use a source-product catalog containing the actual acquisition time, locally
+stored image path, source name, and IBTrACS `SID`. MOSDAC products with their
+metadata or NASA source granules meet this requirement.
 
 #### Option B — MOSDAC / INSAT-3D (requires registered access)
 
@@ -120,6 +126,28 @@ GIBS WMTS REST API).
 **Do not fabricate INSAT imagery. If MOSDAC access is unavailable, use NASA GIBS.**
 
 ### Step 4 — Build the manifest CSV
+
+Use the supplied builder instead of creating labels manually. It rejects
+incompatible 1-minute USA winds, performs timestamp alignment, creates an
+event-level split, writes the train/validation/test IDs, and generates a label
+mapping containing only categories actually present:
+
+```bash
+cd cyclone-ai/backend
+
+python -m ai.training.build_intensity_manifest \
+  --ibtracs ../data/cyclone_intensity/ibtracs_NI.csv \
+  --satellite-catalog ../data/cyclone_intensity/satellite_catalog.csv \
+  --output-dir ../data/cyclone_intensity/assembled \
+  --timestamp-tolerance-minutes 30 \
+  --seed 42
+```
+
+`satellite_catalog.csv` requires `image_path`, `source`,
+`image_timestamp_utc`, and `cyclone_id`. Its timestamp must be the product's
+actual acquisition time, never a download time or daily mosaic date.
+
+### Manual manifest format
 
 ```python
 import csv
