@@ -301,6 +301,9 @@ async def get_cyclone_detail(cyclone_id: str) -> CycloneDetail:
             status_code=404,
             detail=f"Cyclone '{cyclone_id}' not found.",
         )
+    # This fallback is verified historical data, not an active demonstration.
+    detail.data_mode = DataMode.HISTORICAL
+    detail.data_freshness = DataFreshness.HISTORICAL
     return detail
 
 
@@ -333,6 +336,7 @@ async def get_cyclone_track_endpoint(cyclone_id: str) -> CycloneTrack:
             status_code=404,
             detail=f"Track for cyclone '{cyclone_id}' not found.",
         )
+    track.data_mode = DataMode.HISTORICAL
     return track
 
 

@@ -19,6 +19,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -31,6 +32,10 @@ import type {
   SatelliteLayerSpec,
   SatelliteObservation,
 } from '../../types/cyclone';
+
+// Vite does not automatically emit MapLibre's separate module worker. Pointing
+// MapLibre at the bundled URL prevents a production-only worker 404/MIME error.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 // ---- Map style: OSM Light -------------------------------------------------
 const MAP_STYLE: StyleSpecification = {

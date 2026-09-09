@@ -75,6 +75,14 @@ def test_cyclone_detail_schema():
         assert field in data, f"Missing field: {field}"
 
 
+def test_historical_detail_is_not_labelled_as_demo():
+    response = client.get(f"/api/cyclones/{DEMO_CYCLONE_ID}")
+
+    assert response.status_code == 200
+    assert response.json()["data_mode"] == "HISTORICAL"
+    assert response.json()["data_freshness"] == "HISTORICAL"
+
+
 def test_cyclone_detail_not_found():
     response = client.get("/api/cyclones/NONEXISTENT_CYCLONE")
     assert response.status_code == 404
