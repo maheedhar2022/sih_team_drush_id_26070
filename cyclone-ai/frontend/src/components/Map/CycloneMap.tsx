@@ -22,7 +22,15 @@ import * as maplibregl from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-import type { Cyclone, CycloneTrack, DataFreshness, ForecastTrack, SatelliteLayerSpec } from '../../types/cyclone';
+import type {
+  Cyclone,
+  CycloneTrack,
+  DataFreshness,
+  ForecastTrack,
+  SatelliteCatalogStatus,
+  SatelliteLayerSpec,
+  SatelliteObservation,
+} from '../../types/cyclone';
 
 // ---- Map style: OSM Light -------------------------------------------------
 const MAP_STYLE: StyleSpecification = {
@@ -116,6 +124,10 @@ interface Props {
   satelliteError?: string | null;
   onToggleSatelliteLayer?: (id: string) => void;
   onSetSatelliteOpacity?: (id: string, value: number) => void;
+  satelliteCatalogStatus?: SatelliteCatalogStatus | null;
+  latestSatelliteObservation?: SatelliteObservation | null;
+  satelliteCatalogLoading?: boolean;
+  satelliteCatalogError?: string | null;
 }
 
 export const CycloneMap: React.FC<Props> = ({
@@ -124,6 +136,8 @@ export const CycloneMap: React.FC<Props> = ({
   satelliteLayers = [], satelliteEnabled = {},
   satelliteOpacities = {}, satelliteDateLabel, satelliteLoading = false, satelliteError = null,
   onToggleSatelliteLayer, onSetSatelliteOpacity,
+  satelliteCatalogStatus = null, latestSatelliteObservation = null,
+  satelliteCatalogLoading = false, satelliteCatalogError = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<maplibregl.Map | null>(null);
@@ -403,6 +417,10 @@ export const CycloneMap: React.FC<Props> = ({
           satelliteError={satelliteError}
           onToggle={onToggleSatelliteLayer}
           onOpacity={onSetSatelliteOpacity}
+          catalogStatus={satelliteCatalogStatus}
+          latestObservation={latestSatelliteObservation}
+          catalogLoading={satelliteCatalogLoading}
+          catalogError={satelliteCatalogError}
         />
       )}
     </div>
@@ -507,7 +525,8 @@ function LegendRow({ swatch, label, sublabel, unavailable }: {
 
 // ---- Layer Control Panel --------------------------------------------------
 function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpacities,
-  satelliteDateLabel, satelliteLoading, satelliteError, onToggle, onOpacity }: {
+  satelliteDateLabel, satelliteLoading, satelliteError, onToggle, onOpacity,
+  catalogStatus, latestObservation, catalogLoading, catalogError }: {
   onClose: () => void;
   satelliteLayers: SatelliteLayerSpec[];
   satelliteEnabled: Record<string, boolean>;
@@ -517,6 +536,10 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
   satelliteError: string | null;
   onToggle?: (id: string) => void;
   onOpacity?: (id: string, value: number) => void;
+  catalogStatus: SatelliteCatalogStatus | null;
+  latestObservation: SatelliteObservation | null;
+  catalogLoading: boolean;
+  catalogError: string | null;
 }) {
   return (
     <div style={{
@@ -620,6 +643,13 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         </>
       )}
 
+      <CatalogSection
+        status={catalogStatus}
+        observation={latestObservation}
+        loading={catalogLoading}
+        error={catalogError}
+      />
+
       <div style={{
         marginTop: 12, padding: '8px 10px',
         background: '#F9FAFB', borderRadius: 6,
@@ -628,6 +658,52 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         <strong>Sources:</strong> NASA GIBS raster tiles. INSAT/MOSDAC products appear only after source-product validation.
       </div>
     </div>
+  );
+}
+
+function CatalogSection({ status, observation, loading, error }: {
+  status: SatelliteCatalogStatus | null;
+  observation: SatelliteObservation | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  const formatUtc = (value: string | null) => {
+    if (!value) return 'No source product cataloged yet';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toISOString().replace('T', ' ').replace('.000Z', ' UTC');
+  };
+
+  return (
+    <section style={{ marginTop: 14, borderTop: '1px solid #E5E7EB', paddingTop: 12 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        fontSize: 10, fontWeight: 700, color: '#6B7280', letterSpacing: '0.08em',
+      }}>
+        <span>INSAT / MOSDAC CATALOG</span>
+        <span style={{ color: status?.catalog_state === 'READY' ? '#047857' : '#6B7280' }}>
+          {loading ? 'CHECKING' : status?.catalog_state ?? 'UNAVAILABLE'}
+        </span>
+      </div>
+      {error && (
+        <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 8, lineHeight: 1.45 }}>
+          INSAT catalog status could not be loaded.
+        </div>
+      )}
+      {!loading && !error && observation && (
+        <div style={{ marginTop: 8, fontSize: 11, color: '#374151', lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600 }}>{observation.satellite} {observation.processing_level ?? ''}</div>
+          <div>{observation.product_id}</div>
+          <div style={{ color: '#6B7280', overflowWrap: 'anywhere' }}>{observation.source_filename ?? observation.source_record_id}</div>
+          <div style={{ color: '#6B7280' }}>Observed: {formatUtc(observation.observation_timestamp_utc)}</div>
+          <div style={{ color: '#6B7280' }}>State: {observation.status}</div>
+        </div>
+      )}
+      {!loading && !error && !observation && (
+        <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8, lineHeight: 1.45 }}>
+          No validated INSAT source product is cataloged yet.
+        </div>
+      )}
+    </section>
   );
 }
 

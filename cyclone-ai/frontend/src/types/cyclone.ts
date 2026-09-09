@@ -164,6 +164,38 @@ export interface SatelliteLayersListResponse {
   note: string;
 }
 
+export interface SatelliteCatalogStatus {
+  satellite_enabled: boolean;
+  mosdac_enabled: boolean;
+  mosdac_configured: boolean;
+  storage_root_configured: boolean;
+  latest_observation_utc: string | null;
+  catalog_state: 'EMPTY' | 'READY' | 'DEGRADED' | string;
+  note: string;
+}
+
+export interface SatelliteObservation {
+  id: number;
+  source: string;
+  source_record_id: string;
+  source_filename: string | null;
+  satellite: string;
+  sensor: string | null;
+  product_id: string;
+  product_name: string | null;
+  channel: string | null;
+  processing_level: string | null;
+  observation_timestamp_utc: string | null;
+  received_at_utc: string;
+  status: string;
+  web_image_available: boolean;
+}
+
+export interface SatelliteObservationListResponse {
+  observations: SatelliteObservation[];
+  count: number;
+}
+
 // ---- API Responses ---------------------------------------------------------
 
 export interface ActiveCyclonesResponse {

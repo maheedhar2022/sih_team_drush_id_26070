@@ -9,16 +9,18 @@
  *  - Passes satellite layer state to CycloneMap
  *  - Layer toggle + opacity callbacks wired through
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sidebar }           from './components/Sidebar/Sidebar';
 import { TopBar }            from './components/TopBar/TopBar';
 import { CycloneMap }        from './components/Map/CycloneMap';
 import { useCyclones, useCycloneDetail } from './hooks/useCyclones';
 import { useSystemStatus } from './hooks/useSystemStatus';
 import { useSatelliteLayers } from './hooks/useSatelliteLayers';
+import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
 
 const App: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedInitialSystem = useRef(false);
 
   const { health }                          = useSystemStatus();
   const { cyclones, loading, error: cyErr, response } = useCyclones();
@@ -35,6 +37,14 @@ const App: React.FC = () => {
     toggleLayer: satToggle,
     setOpacity: satSetOpacity,
   } = useSatelliteLayers();
+  const satelliteCatalog = useSatelliteCatalog();
+
+  useEffect(() => {
+    if (!selectedInitialSystem.current && cyclones.length > 0) {
+      setSelectedId(cyclones[0].id);
+      selectedInitialSystem.current = true;
+    }
+  }, [cyclones]);
 
   const toggle  = (id: string) => setSelectedId(prev => prev === id ? null : id);
   const isDemo  = health?.demo_mode ?? true;
@@ -86,6 +96,10 @@ const App: React.FC = () => {
           satelliteError={satError}
           onToggleSatelliteLayer={satToggle}
           onSetSatelliteOpacity={satSetOpacity}
+          satelliteCatalogStatus={satelliteCatalog.status}
+          latestSatelliteObservation={satelliteCatalog.latestObservation}
+          satelliteCatalogLoading={satelliteCatalog.loading}
+          satelliteCatalogError={satelliteCatalog.error}
         />
       </div>
     </div>

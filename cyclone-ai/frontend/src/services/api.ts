@@ -18,6 +18,8 @@ import type {
   ForecastTrack,
   HealthResponse,
   SatelliteLayersListResponse,
+  SatelliteCatalogStatus,
+  SatelliteObservationListResponse,
 } from '../types/cyclone';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '';
@@ -112,4 +114,14 @@ export async function fetchDataSources(): Promise<DataSourcesResponse> {
 export async function fetchSatelliteLayers(date?: string): Promise<SatelliteLayersListResponse> {
   const params = date ? `?date=${date}` : '';
   return apiFetch<SatelliteLayersListResponse>(`/api/satellite/layers${params}`);
+}
+
+/** Read-only status for the MOSDAC/INSAT catalog. */
+export async function fetchSatelliteCatalogStatus(): Promise<SatelliteCatalogStatus> {
+  return apiFetch<SatelliteCatalogStatus>('/api/satellite/status');
+}
+
+/** Read-only, verified MOSDAC source-product records. */
+export async function fetchSatelliteObservations(): Promise<SatelliteObservationListResponse> {
+  return apiFetch<SatelliteObservationListResponse>('/api/satellite/observations?source=MOSDAC&limit=1');
 }
