@@ -13,6 +13,8 @@ interface Props {
   loading: boolean;
   error: string | null;
   dataMode: DataMode | 'OFFLINE';
+  aiLabOpen: boolean;
+  onToggleAiLab: () => void;
 }
 
 // ---- SVG Icon set (scientific / UI — no emoji) ----------------------------
@@ -57,7 +59,7 @@ const IconCyclone = () => (
 
 // ---- Component ------------------------------------------------------------
 
-export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loading, error, dataMode }) => {
+export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loading, error, dataMode, aiLabOpen, onToggleAiLab }) => {
   const isHistorical = dataMode === 'HISTORICAL' || dataMode === 'DEMO';
   const isOffline = dataMode === 'OFFLINE';
   return (
@@ -89,7 +91,7 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
       <nav style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <NavItem Icon={IconMonitor} label="Monitor" active />
         <NavItem Icon={IconArchive} label="Archive" />
-        <NavItem Icon={IconLab} label="AI Lab" />
+        <NavItem Icon={IconLab} label="AI Lab" active={aiLabOpen} onClick={onToggleAiLab} />
         <NavItem Icon={IconInfo} label="About" />
       </nav>
 
@@ -176,9 +178,9 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
   );
 };
 
-function NavItem({ Icon, label, active }: { Icon: React.FC; label: string; active?: boolean }) {
+function NavItem({ Icon, label, active, onClick }: { Icon: React.FC; label: string; active?: boolean; onClick?: () => void }) {
   return (
-    <button style={{
+    <button onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 12,
       width: '100%',
       padding: '10px 12px',

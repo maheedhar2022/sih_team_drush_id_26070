@@ -2,13 +2,18 @@
 
 CycloneAI is a research-oriented North Indian Ocean cyclone monitoring application.
 It presents observed tracks, official forecast tracks when an authoritative provider
-supplies them, and satellite layer provenance. It does not generate AI predictions.
+supplies them, satellite layer provenance, and a Phase 4 image-classification
+baseline. It does not perform track, intensity, or movement prediction.
 
 ## Architecture
 
 External providers flow through validation and normalisation before persistence:
 
 `provider -> validation -> PostgreSQL/SQLite -> FastAPI -> React + MapLibre`
+
+The optional detection path is separate and never supplies an official warning:
+
+`licensed satellite image -> preprocessing -> trained ResNet -> detection API`
 
 The React client only calls the FastAPI API. It never calls meteorological data
 providers directly.
@@ -61,6 +66,18 @@ DATABASE_URL=postgresql+asyncpg://...
 CORS_ORIGINS=["https://your-vercel-project.vercel.app"]
 ```
 
+Phase 4 model settings:
+
+```text
+AI_MODEL_DIR=../models
+AI_DEVICE=auto
+AI_MAX_IMAGE_MB=10
+```
+
+`AI_MODEL_DIR/detection/best.pt` is intentionally absent until a licensed,
+event-split dataset has been trained. Without it, the API reports
+`MODEL_NOT_TRAINED` and the UI shows an unavailable state.
+
 Optional MOSDAC source-product discovery requires these backend-only variables:
 
 ```text
@@ -83,6 +100,9 @@ labelled as live.
 
 See [Data Sources and Provenance](docs/data-sources-provenance.md) for sources,
 credentials, freshness, and known limitations.
+
+See [AI Detection Dataset](docs/AI_DETECTION_DATASET.md) for the required
+manifest, licence/provenance record, event-level split policy, and training run.
 
 ## Tests
 
@@ -109,3 +129,5 @@ npm run build
 - `GET /api/satellite/observations`
 - `POST /api/satellite/mosdac/discover` (admin token required)
 - `POST /api/satellite/observations/{id}/download` (admin token and explicit download enablement required)
+- `GET /api/ai/detection/status`
+- `POST /api/ai/detection?source=<source>&observation_id=<optional-id>`

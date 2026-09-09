@@ -35,10 +35,13 @@ class TestGIBSLayerDefinitions:
             assert layer.max_zoom > 0
             assert layer.attribution, "attribution must be non-empty"
 
-    def test_at_least_one_visible_and_infrared_layer(self):
+    def test_only_verified_visible_layer_is_advertised(self):
         channels = {l.channel for l in GIBS_LAYERS}
         assert "VIS" in channels, "Must have at least one VIS layer"
-        assert "IR" in channels, "Must have at least one IR layer"
+        assert "IR" not in channels, "Unverified cloud-temperature layers must stay hidden"
+        assert [l.layer_id for l in GIBS_LAYERS] == [
+            "MODIS_Terra_CorrectedReflectance_TrueColor"
+        ]
 
     def test_unique_layer_ids(self):
         ids = [l.layer_id for l in GIBS_LAYERS]

@@ -29,7 +29,7 @@ interface SatelliteLayersState {
   note: string | null;
 }
 
-export function useSatelliteLayers() {
+export function useSatelliteLayers(observationTimestamp: string | null = null) {
   const [state, setState] = useState<SatelliteLayersState>({
     layers: [],
     loading: true,
@@ -43,9 +43,23 @@ export function useSatelliteLayers() {
   useEffect(() => {
     let cancelled = false;
 
+    // Never substitute today's imagery for a selected historical cyclone.
+    if (!observationTimestamp) {
+      setState({
+        layers: [], loading: false, error: null, enabled: {}, opacities: {},
+        dateLabel: null, note: null,
+      });
+      return () => { cancelled = true; };
+    }
+
     const load = async () => {
       try {
-        const response: SatelliteLayersListResponse = await fetchSatelliteLayers();
+        const observationDate = new Date(observationTimestamp);
+        if (Number.isNaN(observationDate.getTime())) {
+          throw new Error('Cyclone observation timestamp is invalid.');
+        }
+        const date = observationDate.toISOString().slice(0, 10);
+        const response: SatelliteLayersListResponse = await fetchSatelliteLayers(date);
         if (cancelled) return;
 
         // Initialize opacities from defaults, enabled = false for all
@@ -81,7 +95,7 @@ export function useSatelliteLayers() {
 
     void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [observationTimestamp]);
 
   const toggleLayer = useCallback((layerId: string) => {
     setState(prev => ({

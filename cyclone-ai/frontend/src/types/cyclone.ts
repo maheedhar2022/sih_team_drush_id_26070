@@ -223,6 +223,31 @@ export interface HealthResponse {
   active_ni_storms: number;
 }
 
+// ---- AI Detection (Phase 4) -----------------------------------------------
+
+export interface AiDetectionStatus {
+  status: 'READY' | 'MODEL_NOT_TRAINED' | 'DEPENDENCY_UNAVAILABLE' | string;
+  model_version: string | null;
+  architecture: string | null;
+  dataset_version: string | null;
+  reason: string | null;
+}
+
+export interface AiDetectionResult {
+  status: 'success' | 'MODEL_NOT_TRAINED' | 'DEPENDENCY_UNAVAILABLE' | string;
+  prediction: 'cyclone' | 'no_cyclone' | null;
+  confidence: number | null;
+  cyclone_probability: number | null;
+  no_cyclone_probability: number | null;
+  model_version: string | null;
+  architecture: string | null;
+  dataset_version: string | null;
+  inference_timestamp_utc: string | null;
+  observation_id: string | null;
+  source: string | null;
+  reason: string | null;
+}
+
 // ---- UI State --------------------------------------------------------------
 
 export interface SelectedCycloneState {

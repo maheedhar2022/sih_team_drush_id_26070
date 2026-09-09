@@ -11,9 +11,7 @@
  *  - LIVE / HISTORICAL / DEMO mode badge
  *
  * Satellite Layer Support:
- *  - Visible (VIS): MODIS/VIIRS true-color reflectance
- *  - Infrared (IR): Cloud-top temperature
- *  - Water Vapor (WV): Mid-level humidity
+ *  - Visible (VIS): MODIS Terra true-color reflectance
  *  - Source: NASA GIBS (public, no auth required)
  *  - No fabricated imagery — real tiles with explicit timestamps
  */
@@ -147,6 +145,7 @@ export const CycloneMap: React.FC<Props> = ({
   const markerMap    = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [loaded, setLoaded]             = useState(false);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
+  const [tileError, setTileError] = useState<string | null>(null);
 
   // Init map
   useEffect(() => {
@@ -162,6 +161,10 @@ export const CycloneMap: React.FC<Props> = ({
     m.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
     m.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     m.on('load', () => setLoaded(true));
+    m.on('error', (event) => {
+      const sourceId = (event as unknown as { sourceId?: string }).sourceId;
+      if (sourceId?.startsWith('sat-src-')) setTileError('Satellite provider request failed.');
+    });
     mapRef.current = m;
     return () => { m.remove(); mapRef.current = null; };
   }, []);
@@ -170,6 +173,7 @@ export const CycloneMap: React.FC<Props> = ({
   useEffect(() => {
     const m = mapRef.current;
     if (!m || !loaded) return;
+    if (Object.values(satelliteEnabled).some(Boolean)) setTileError(null);
 
     for (const layer of satelliteLayers) {
       const srcId = `sat-src-${layer.layer_id}`;
@@ -418,6 +422,7 @@ export const CycloneMap: React.FC<Props> = ({
           satelliteDateLabel={satelliteDateLabel}
           satelliteLoading={satelliteLoading}
           satelliteError={satelliteError}
+          satelliteRenderError={tileError}
           onToggle={onToggleSatelliteLayer}
           onOpacity={onSetSatelliteOpacity}
           latestObservation={latestSatelliteObservation}
@@ -474,7 +479,7 @@ function MapLegend({ activeSatCount, satelliteDateLabel }: {
           </div>
         }
         label="AI Prediction"
-        sublabel="Pending — Phase 3"
+        sublabel="Not implemented"
         unavailable
       />
 
@@ -528,7 +533,7 @@ function LegendRow({ swatch, label, sublabel, unavailable }: {
 // ---- Layer Control Panel --------------------------------------------------
 function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpacities,
   satelliteDateLabel, satelliteLoading, satelliteError, onToggle, onOpacity,
-  latestObservation, catalogLoading, catalogError }: {
+  satelliteRenderError, latestObservation, catalogLoading, catalogError }: {
   onClose: () => void;
   satelliteLayers: SatelliteLayerSpec[];
   satelliteEnabled: Record<string, boolean>;
@@ -536,6 +541,7 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
   satelliteDateLabel?: string | null;
   satelliteLoading: boolean;
   satelliteError: string | null;
+  satelliteRenderError: string | null;
   onToggle?: (id: string) => void;
   onOpacity?: (id: string, value: number) => void;
   latestObservation: SatelliteObservation | null;
@@ -600,6 +606,13 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
       {!satelliteLoading && satelliteError && (
         <div style={{ fontSize: 11, color: '#B91C1C', padding: '8px 0', lineHeight: 1.45 }}>
           Satellite layer service is unavailable.
+        </div>
+      )}
+
+      {satelliteRenderError && (
+        <div style={{ fontSize: 11, color: '#B91C1C', padding: '8px 0', lineHeight: 1.45 }}>
+          <strong>SATELLITE DATA UNAVAILABLE</strong><br />
+          Reason: {satelliteRenderError}
         </div>
       )}
 

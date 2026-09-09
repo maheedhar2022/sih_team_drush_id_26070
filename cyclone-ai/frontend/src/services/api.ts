@@ -12,6 +12,7 @@
 
 import type {
   ActiveCyclonesResponse,
+  AiDetectionStatus,
   CycloneDetail,
   CycloneTrack,
   DataSourcesResponse,
@@ -124,4 +125,9 @@ export async function fetchSatelliteCatalogStatus(): Promise<SatelliteCatalogSta
 /** Read-only, verified MOSDAC source-product records. */
 export async function fetchSatelliteObservations(): Promise<SatelliteObservationListResponse> {
   return apiFetch<SatelliteObservationListResponse>('/api/satellite/observations?source=MOSDAC&limit=1');
+}
+
+/** Read model readiness. This endpoint never creates a prediction. */
+export async function fetchAiDetectionStatus(): Promise<AiDetectionStatus> {
+  return apiFetch<AiDetectionStatus>('/api/ai/detection/status');
 }

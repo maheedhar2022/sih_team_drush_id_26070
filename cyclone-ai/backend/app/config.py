@@ -1,5 +1,5 @@
 """
-CycloneAI Backend — Application Configuration (Phase 2)
+CycloneAI Backend — Application Configuration (Phase 4)
 Reads settings from environment variables / .env file.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── General ──────────────────────────────────────────────────────────────
     app_env: str = "development"
-    app_version: str = "0.3.0-phase3"
+    app_version: str = "0.4.0-phase4"
     demo_mode: bool = True   # Falls back to historical if no live data found
 
     # CORS — accepts a comma-separated string or a JSON list
@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     # ── AI ────────────────────────────────────────────────────────────────────
     ai_model_dir: str = "../models"
     ai_device: str = "auto"   # auto | cuda | cpu
+    ai_max_image_mb: int = 10
 
 
 @lru_cache(maxsize=1)

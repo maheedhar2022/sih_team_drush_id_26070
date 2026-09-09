@@ -17,9 +17,12 @@ import { useCyclones, useCycloneDetail } from './hooks/useCyclones';
 import { useSystemStatus } from './hooks/useSystemStatus';
 import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
+import { useAiDetectionStatus } from './hooks/useAiDetectionStatus';
+import { AiAnalysisPanel } from './components/AiAnalysis/AiAnalysisPanel';
 
 const App: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [aiLabOpen, setAiLabOpen] = useState(false);
   const selectedInitialSystem = useRef(false);
 
   const { health }                          = useSystemStatus();
@@ -36,8 +39,9 @@ const App: React.FC = () => {
     error: satError,
     toggleLayer: satToggle,
     setOpacity: satSetOpacity,
-  } = useSatelliteLayers();
+  } = useSatelliteLayers(detail?.last_observation_utc ?? null);
   const satelliteCatalog = useSatelliteCatalog();
+  const aiDetection = useAiDetectionStatus();
 
   useEffect(() => {
     if (!selectedInitialSystem.current && cyclones.length > 0) {
@@ -69,6 +73,8 @@ const App: React.FC = () => {
         loading={loading}
         error={cyErr}
         dataMode={displayMode}
+        aiLabOpen={aiLabOpen}
+        onToggleAiLab={() => setAiLabOpen(open => !open)}
       />
 
       <main className="app-workspace">
@@ -98,6 +104,13 @@ const App: React.FC = () => {
             latestSatelliteObservation={satelliteCatalog.latestObservation}
             satelliteCatalogLoading={satelliteCatalog.loading}
             satelliteCatalogError={satelliteCatalog.error}
+          />
+          <AiAnalysisPanel
+            open={aiLabOpen}
+            status={aiDetection.status}
+            loading={aiDetection.loading}
+            error={aiDetection.error}
+            onClose={() => setAiLabOpen(false)}
           />
         </section>
       </main>

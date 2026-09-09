@@ -24,6 +24,11 @@ lxml==5.3.0
 # CSV / data handling
 pandas==2.2.3
 
+# Phase 4 AI cyclone detection (CPU-compatible baseline; CUDA is auto-detected)
+torch==2.5.1
+torchvision==0.20.1
+Pillow==11.0.0
+
 # Testing
 pytest==8.3.3
 pytest-asyncio==0.24.0

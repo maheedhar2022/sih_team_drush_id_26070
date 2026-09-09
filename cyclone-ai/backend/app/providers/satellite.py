@@ -5,11 +5,10 @@ Source:   NASA GIBS (Global Imagery Browse Services)
 URL:      https://gibs.earthdata.nasa.gov/wmts/epsg3857/best
 Auth:     None — fully public, no API key required
 Format:   WMTS raster tiles (PNG/JPEG)
-Latency:  Near-real-time (~3-5h for MODIS, ~6h for VIIRS)
+Latency:  Public daily imagery; the selected observation date is explicit
 
-Provides satellite imagery layers for cyclone monitoring:
-  - Visible (VIS):   True-color corrected reflectance
-  - Infrared (IR):   Cloud-top temperature / brightness temperature
+Provides one verified secondary satellite layer for cyclone monitoring:
+  - Visible (VIS):   MODIS Terra true-color corrected reflectance
 
 Each layer includes explicit:
   - source attribution (NASA GIBS / instrument name)
@@ -18,7 +17,7 @@ Each layer includes explicit:
   - availability flag (never fabricated)
 
 Limitations:
-  - MODIS/VIIRS imagery has daily granularity (not hourly)
+  - MODIS imagery has daily granularity (not hourly)
   - No custom Indian Ocean INSAT-3DR data (requires MOSDAC credentials)
   - Visible imagery only available during daytime passes
   - Some layers may have gaps for specific dates
@@ -67,39 +66,6 @@ GIBS_LAYERS: List[GIBSLayerDef] = [
         default_opacity=0.8,
         max_zoom=9,
         attribution="NASA GIBS / MODIS Terra",
-    ),
-    GIBSLayerDef(
-        layer_id="MODIS_Terra_Cloud_Top_Temp_Day",
-        display_name="Cloud-Top Temperature",
-        channel="IR",
-        description="MODIS Terra daytime cloud-top temperature — proxy for IR imagery",
-        instrument="MODIS / Terra",
-        image_format="png",
-        default_opacity=0.7,
-        max_zoom=7,
-        attribution="NASA GIBS / MODIS Terra",
-    ),
-    GIBSLayerDef(
-        layer_id="MODIS_Aqua_Cloud_Top_Temp_Day",
-        display_name="Cloud-Top Temp (Aqua)",
-        channel="IR",
-        description="MODIS Aqua daytime cloud-top temperature — complementary IR pass",
-        instrument="MODIS / Aqua",
-        image_format="png",
-        default_opacity=0.7,
-        max_zoom=7,
-        attribution="NASA GIBS / MODIS Aqua",
-    ),
-    GIBSLayerDef(
-        layer_id="VIIRS_SNPP_CorrectedReflectance_TrueColor",
-        display_name="Visible (VIIRS)",
-        channel="VIS",
-        description="VIIRS Suomi NPP corrected reflectance — high-res true-color",
-        instrument="VIIRS / Suomi NPP",
-        image_format="jpg",
-        default_opacity=0.8,
-        max_zoom=9,
-        attribution="NASA GIBS / VIIRS SNPP",
     ),
 ]
 
@@ -197,22 +163,6 @@ class SatelliteProvider:
                 )
                 if response.status_code == 200:
                     return True, None
-                # GIBS returns 400 to this backend runtime for the two MODIS
-                # cloud-temperature layers even though an ordinary source-tile
-                # GET for the identical URL succeeds. Keep those validated
-                # overlays usable; genuine missing tiles still return 404.
-                if (
-                    response.status_code == 400
-                    and layer.layer_id in {
-                        "MODIS_Terra_Cloud_Top_Temp_Day",
-                        "MODIS_Aqua_Cloud_Top_Temp_Day",
-                    }
-                ):
-                    logger.warning(
-                        "GIBS probe returned a known false HTTP 400 for %s; keeping the verified layer enabled.",
-                        layer.layer_id,
-                    )
-                    return True, None
                 return False, f"HTTP {response.status_code}"
         except httpx.HTTPError as exc:
             return False, f"Network error: {exc}"
@@ -227,7 +177,7 @@ class SatelliteProvider:
         Return available satellite layers for the target date.
 
         If target_date is None, uses yesterday (GIBS NRT has ~1 day lag
-        for most MODIS/VIIRS products).
+        for most MODIS products).
 
         Never raises — errors are captured per-layer.
         """
@@ -279,9 +229,8 @@ class SatelliteProvider:
             retrieved_at_utc=now.isoformat(),
             gibs_base_url=self.base_url,
             note=(
-                f"Satellite imagery from NASA GIBS for {date_label}. "
-                f"{available_count}/{len(layers)} layers available. "
-                "NRT data has ~3-5h latency. "
+                f"Secondary public imagery from NASA GIBS for {date_label}. "
+                "Verified product: MODIS Terra True Color. "
                 "Source: NASA Global Imagery Browse Services (GIBS)."
             ),
         )

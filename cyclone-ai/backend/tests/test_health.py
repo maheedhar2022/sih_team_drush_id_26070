@@ -53,10 +53,11 @@ def test_health_sources_present():
     assert "ibtracs" in data["sources"]
 
 
-def test_health_version_is_phase2():
+def test_health_version_is_present():
     response = client.get("/api/health")
     data = response.json()
-    assert "phase2" in data["version"] or "0.2" in data["version"]
+    assert isinstance(data["version"], str)
+    assert data["version"]
 
 
 def test_root_redirect():

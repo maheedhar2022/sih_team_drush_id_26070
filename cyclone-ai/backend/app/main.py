@@ -1,9 +1,9 @@
 """
-CycloneAI — FastAPI Application Entry Point (Phase 2)
+CycloneAI — FastAPI Application Entry Point (Phase 4)
 
 Startup sequence:
   1. CORS middleware
-  2. API routers (health + cyclones)
+  2. API routers (health + cyclones + AI detection)
   3. DB init (create tables if not exist)
   4. Initial data ingest (if DB empty or stale)
   5. Background scheduler start
@@ -32,13 +32,14 @@ logger = logging.getLogger("cyclone_ai")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("=" * 60)
-    logger.info("CycloneAI Backend starting — Phase 3")
+    logger.info("CycloneAI Backend starting — Phase 4")
     logger.info("  Version    : %s", settings.app_version)
     logger.info("  Environment: %s", settings.app_env)
     logger.info("  Database   : %s://[configured]", settings.database_url.split("://", 1)[0])
     logger.info("  IBTrACS    : %s", settings.ibtracs_base_url[:60])
     logger.info("  RSMC Bulletin: %s", "enabled" if settings.rsmc_bulletin_enabled else "disabled")
     logger.info("  Satellite    : %s", "enabled (NASA GIBS)" if settings.satellite_enabled else "disabled")
+    logger.info("  AI detection : model directory %s", settings.ai_model_dir)
     logger.info("=" * 60)
 
     # 1. Initialise DB (create tables)
@@ -79,7 +80,7 @@ app = FastAPI(
     title="CycloneAI API",
     description=(
         "Real-Time AI-Based Tropical Cyclone Monitoring, Analysis, "
-        "Classification and Prediction Platform — Phase 2 API\n\n"
+        "Classification and Prediction Platform — Phase 4 API\n\n"
         "Data sources: IBTrACS v04r01 (NOAA NCEI), IMD/RSMC New Delhi"
     ),
     version=settings.app_version,
@@ -92,6 +93,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    # Vite selects the next free local port, so development needs to permit
+    # localhost/127.0.0.1 ports beyond the default 5173 without widening prod.
+    allow_origin_regex=(r"https?://(localhost|127\.0\.0\.1)(:\d+)?" if settings.app_env == "development" else None),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,7 +109,7 @@ async def root() -> dict:
     return {
         "service": "CycloneAI API",
         "version": settings.app_version,
-        "phase": "3 — Satellite Imagery Integration",
+        "phase": "4 — AI Cyclone Detection",
         "docs": "/api/docs",
         "health": "/api/health",
         "sources": "/api/cyclones/sources/list",
