@@ -53,7 +53,8 @@ Official site: <https://rsmcnewdelhi.imd.gov.in>
 - Role: optional INSAT-3DR and INSAT-3DS imagery metadata and downloads.
 - Access: official MOSDAC account credentials are required for authenticated
   downloads. Configure `MOSDAC_USERNAME` and `MOSDAC_PASSWORD` only in the
-  backend environment.
+  backend environment, then set `MOSDAC_ENABLED=true` only after confirming
+  the account and selected datasets work.
 - Data: search metadata can be inspected before downloading; downloaded data
   products are not automatically treated as web map tiles.
 - Limitation: this project exposes availability metadata only. It does not

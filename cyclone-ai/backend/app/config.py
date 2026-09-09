@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     mosdac_username: str = ""
     mosdac_password: str = ""
     mosdac_api_url: str = "https://www.mosdac.gov.in"
+    mosdac_enabled: bool = False
     # Keep legacy key name for backward compat
     mosdac_api_key: str = ""
 

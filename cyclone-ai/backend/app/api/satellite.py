@@ -136,7 +136,7 @@ async def list_satellite_layers(
     mosdac_note = ""
     try:
         mosdac = get_mosdac_provider()
-        if mosdac.is_configured:
+        if settings.mosdac_enabled and mosdac.is_configured:
             mosdac_result = await mosdac.get_layers(target_date=target_date)
             mosdac_note = f" | {mosdac_result.note}"
             for ml in mosdac_result.layers:
@@ -157,6 +157,8 @@ async def list_satellite_layers(
                     available=ml.available,
                     unavailable_reason=ml.unavailable_reason,
                 ))
+        elif mosdac.is_configured:
+            mosdac_note = " | MOSDAC: disabled until explicitly enabled"
     except Exception as exc:
         logger.warning("MOSDAC layer fetch failed (non-fatal): %s", exc)
         mosdac_note = " | MOSDAC: unavailable"
