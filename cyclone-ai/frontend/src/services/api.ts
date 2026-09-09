@@ -2,7 +2,8 @@
  * CycloneAI — Typed API Client (Phase 2)
  *
  * All backend communication goes through this module.
- * Base URL is read from VITE_API_URL env var.
+ * Base URL is read from VITE_API_URL. Without one, requests stay same-origin,
+ * which lets Vercel route /api calls to the serverless backend.
  *
  * New in Phase 2:
  *   fetchForecastTrack() — official RSMC forecast track
@@ -19,17 +20,22 @@ import type {
   SatelliteLayersListResponse,
 } from '../types/cyclone';
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
 
 // ---- Generic fetch helper -------------------------------------------------
 
 export class ApiError extends Error {
+  public readonly status: number;
+  public readonly detail: string;
+
   constructor(
-    public status: number,
-    public detail: string,
+    status: number,
+    detail: string,
   ) {
     super(`API Error ${status}: ${detail}`);
     this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
   }
 }
 
