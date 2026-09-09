@@ -1,13 +1,13 @@
 /**
- * CycloneAI — Root Application (Phase 2b)
+ * CycloneAI — Root Application (Phase 5)
  *
  * Light Theme 2-Column Layout:
  * [ Sidebar (260px) | Map Area (flex-1, containing TopBar) ]
  *
- * Phase 2b changes:
- *  - Integrates useSatelliteLayers hook
- *  - Passes satellite layer state to CycloneMap
- *  - Layer toggle + opacity callbacks wired through
+ * Phase 5 changes:
+ *  - Integrates AI intensity analysis panel with upload + inference
+ *  - Passes selected cyclone to AiAnalysisPanel for official-vs-AI display
+ *  - Satellite layer state wired through
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Sidebar }           from './components/Sidebar/Sidebar';
@@ -119,6 +119,7 @@ const App: React.FC = () => {
             intensityStatus={aiIntensity.status}
             intensityLoading={aiIntensity.loading}
             intensityError={aiIntensity.error}
+            selectedCyclone={detail}
             onClose={() => setAiLabOpen(false)}
           />
         </section>

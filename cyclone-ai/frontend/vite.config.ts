@@ -22,7 +22,7 @@ export default defineConfig({
     exclude: ['maplibre-gl'],
   },
   define: {
-    '__APP_VERSION__': JSON.stringify('0.4.0-phase4'),
+    '__APP_VERSION__': JSON.stringify('0.5.0-phase5'),
   },
 })
 

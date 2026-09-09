@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── General ──────────────────────────────────────────────────────────────
     app_env: str = "development"
-    app_version: str = "0.4.0-phase4"
+    app_version: str = "0.5.0-phase5"
     demo_mode: bool = True   # Falls back to historical if no live data found
 
     # CORS — accepts a comma-separated string or a JSON list
