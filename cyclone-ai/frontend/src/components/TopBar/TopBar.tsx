@@ -149,11 +149,17 @@ export const TopBar: React.FC<Props> = ({ detail, health, dataFreshness }) => {
         border: '1px solid #E2E8F0', borderRadius: 20,
         padding: '7px 12px', fontSize: 11, fontWeight: 600,
       }}>
-        Source-tracked
+        Source: {sourceLabel(detail.source)}
       </span>
     </div>
   );
 };
+
+function sourceLabel(source: string | null | undefined): string {
+  if (!source) return '—';
+  if (/IMD|RSMC/i.test(source)) return 'IMD / RSMC';
+  return source.split('(')[0].trim();
+}
 
 function Chip({ Icon, label }: { Icon: React.FC; label: string }) {
   return (

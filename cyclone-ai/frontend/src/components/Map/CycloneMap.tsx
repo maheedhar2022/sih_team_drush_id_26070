@@ -28,7 +28,6 @@ import type {
   CycloneTrack,
   DataFreshness,
   ForecastTrack,
-  SatelliteCatalogStatus,
   SatelliteLayerSpec,
   SatelliteObservation,
 } from '../../types/cyclone';
@@ -129,7 +128,6 @@ interface Props {
   satelliteError?: string | null;
   onToggleSatelliteLayer?: (id: string) => void;
   onSetSatelliteOpacity?: (id: string, value: number) => void;
-  satelliteCatalogStatus?: SatelliteCatalogStatus | null;
   latestSatelliteObservation?: SatelliteObservation | null;
   satelliteCatalogLoading?: boolean;
   satelliteCatalogError?: string | null;
@@ -141,7 +139,7 @@ export const CycloneMap: React.FC<Props> = ({
   satelliteLayers = [], satelliteEnabled = {},
   satelliteOpacities = {}, satelliteDateLabel, satelliteLoading = false, satelliteError = null,
   onToggleSatelliteLayer, onSetSatelliteOpacity,
-  satelliteCatalogStatus = null, latestSatelliteObservation = null,
+  latestSatelliteObservation = null,
   satelliteCatalogLoading = false, satelliteCatalogError = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -422,7 +420,6 @@ export const CycloneMap: React.FC<Props> = ({
           satelliteError={satelliteError}
           onToggle={onToggleSatelliteLayer}
           onOpacity={onSetSatelliteOpacity}
-          catalogStatus={satelliteCatalogStatus}
           latestObservation={latestSatelliteObservation}
           catalogLoading={satelliteCatalogLoading}
           catalogError={satelliteCatalogError}
@@ -531,7 +528,7 @@ function LegendRow({ swatch, label, sublabel, unavailable }: {
 // ---- Layer Control Panel --------------------------------------------------
 function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpacities,
   satelliteDateLabel, satelliteLoading, satelliteError, onToggle, onOpacity,
-  catalogStatus, latestObservation, catalogLoading, catalogError }: {
+  latestObservation, catalogLoading, catalogError }: {
   onClose: () => void;
   satelliteLayers: SatelliteLayerSpec[];
   satelliteEnabled: Record<string, boolean>;
@@ -541,7 +538,6 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
   satelliteError: string | null;
   onToggle?: (id: string) => void;
   onOpacity?: (id: string, value: number) => void;
-  catalogStatus: SatelliteCatalogStatus | null;
   latestObservation: SatelliteObservation | null;
   catalogLoading: boolean;
   catalogError: string | null;
@@ -584,7 +580,7 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         letterSpacing: '0.08em', margin: '14px 0 8px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span>NASA GIBS IMAGERY</span>
+        <span>SECONDARY · NASA GIBS</span>
         {satelliteDateLabel && (
           <span style={{
             background: '#EEF2FF', color: '#4338CA', padding: '2px 6px',
@@ -649,7 +645,6 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
       )}
 
       <CatalogSection
-        status={catalogStatus}
         observation={latestObservation}
         loading={catalogLoading}
         error={catalogError}
@@ -666,8 +661,7 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
   );
 }
 
-function CatalogSection({ status, observation, loading, error }: {
-  status: SatelliteCatalogStatus | null;
+function CatalogSection({ observation, loading, error }: {
   observation: SatelliteObservation | null;
   loading: boolean;
   error: string | null;
@@ -684,9 +678,9 @@ function CatalogSection({ status, observation, loading, error }: {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         fontSize: 10, fontWeight: 700, color: '#6B7280', letterSpacing: '0.08em',
       }}>
-        <span>INSAT / MOSDAC CATALOG</span>
-        <span style={{ color: status?.catalog_state === 'READY' ? '#047857' : '#6B7280' }}>
-          {loading ? 'CHECKING' : status?.catalog_state ?? 'UNAVAILABLE'}
+        <span>PRIMARY · INSAT / MOSDAC</span>
+        <span style={{ color: observation?.web_image_available ? '#047857' : '#6B7280' }}>
+          {loading ? 'CHECKING' : observation?.web_image_available ? 'AVAILABLE' : 'UNAVAILABLE'}
         </span>
       </div>
       {error && (
@@ -694,7 +688,7 @@ function CatalogSection({ status, observation, loading, error }: {
           INSAT catalog status could not be loaded.
         </div>
       )}
-      {!loading && !error && observation && (
+      {!loading && !error && observation?.web_image_available && (
         <div style={{ marginTop: 8, fontSize: 11, color: '#374151', lineHeight: 1.5 }}>
           <div style={{ fontWeight: 600 }}>{observation.satellite} {observation.processing_level ?? ''}</div>
           <div>{observation.product_id}</div>
@@ -703,9 +697,11 @@ function CatalogSection({ status, observation, loading, error }: {
           <div style={{ color: '#6B7280' }}>State: {observation.status}</div>
         </div>
       )}
-      {!loading && !error && !observation && (
+      {!loading && !error && !observation?.web_image_available && (
         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 8, lineHeight: 1.45 }}>
-          No validated INSAT source product is cataloged yet.
+          Satellite imagery unavailable.<br />
+          Source: MOSDAC / ISRO.<br />
+          Reason: validated source product/access required.
         </div>
       )}
     </section>
@@ -915,6 +911,9 @@ const BADGE_STYLES: Record<string, { bg: string; color: string; border: string }
 
 function DataModeBadge({ freshness, source }: { freshness: string; source?: string | null }) {
   const s = BADGE_STYLES[freshness] ?? BADGE_STYLES.DEMO;
+  const sourceLabel = source
+    ? /IMD|RSMC/i.test(source) ? 'IMD / RSMC' : source.split('(')[0].trim()
+    : null;
   return (
     <div style={{
       position: 'absolute', bottom: 56, left: 12, zIndex: 10,
@@ -932,9 +931,9 @@ function DataModeBadge({ freshness, source }: { freshness: string; source?: stri
       maxWidth: 300,
     }}>
       {freshness}
-      {source && (
+      {sourceLabel && (
         <div style={{ fontWeight: 400, letterSpacing: 0, marginTop: 1, opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {source}
+          {sourceLabel}
         </div>
       )}
     </div>

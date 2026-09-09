@@ -17,8 +17,6 @@ import { useCyclones, useCycloneDetail } from './hooks/useCyclones';
 import { useSystemStatus } from './hooks/useSystemStatus';
 import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
-import { useDataSources } from './hooks/useCyclones';
-import { OperationsPanel } from './components/OperationsPanel/OperationsPanel';
 
 const App: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -27,7 +25,6 @@ const App: React.FC = () => {
   const { health }                          = useSystemStatus();
   const { cyclones, loading, error: cyErr, response } = useCyclones();
   const { detail, track, forecastTrack }    = useCycloneDetail(selectedId);
-  const { response: dataSources, loading: dataSourcesLoading } = useDataSources();
 
   // Satellite imagery layers (Phase 2b)
   const {
@@ -75,7 +72,7 @@ const App: React.FC = () => {
       />
 
       <main className="app-workspace">
-        <section className="map-stage">
+        <section className="map-stage map-only-stage">
           <TopBar
             detail={detail}
             health={health}
@@ -98,23 +95,11 @@ const App: React.FC = () => {
             satelliteError={satError}
             onToggleSatelliteLayer={satToggle}
             onSetSatelliteOpacity={satSetOpacity}
-            satelliteCatalogStatus={satelliteCatalog.status}
             latestSatelliteObservation={satelliteCatalog.latestObservation}
             satelliteCatalogLoading={satelliteCatalog.loading}
             satelliteCatalogError={satelliteCatalog.error}
           />
         </section>
-        <OperationsPanel
-          detail={detail}
-          track={track}
-          forecastTrack={forecastTrack}
-          health={health}
-          dataSources={dataSources}
-          dataSourcesLoading={dataSourcesLoading}
-          satelliteLayers={satLayers}
-          satelliteCatalogStatus={satelliteCatalog.status}
-          latestSatelliteObservation={satelliteCatalog.latestObservation}
-        />
       </main>
     </div>
   );
