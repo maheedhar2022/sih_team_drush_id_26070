@@ -25,28 +25,6 @@ const IconMonitor = () => (
   </svg>
 );
 
-const IconArchive = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="21 8 21 21 3 21 3 8"/>
-    <rect x="1" y="3" width="22" height="5"/>
-    <line x1="10" y1="12" x2="14" y2="12"/>
-  </svg>
-);
-
-const IconLab = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11l-4 4h14l-4-4V3"/>
-  </svg>
-);
-
-const IconInfo = () => (
-  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="12" y1="16" x2="12" y2="12"/>
-    <line x1="12" y1="8" x2="12.01" y2="8"/>
-  </svg>
-);
-
 // Spiral / cyclone icon using SVG path (no emoji)
 const IconCyclone = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" stroke="#FFFFFF" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -92,9 +70,6 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
       {/* Navigation Links */}
       <nav style={{ padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         <NavItem Icon={IconMonitor} label="Monitor" active />
-        <NavItem Icon={IconArchive} label="Archive" />
-        <NavItem Icon={IconLab}     label="AI Lab" />
-        <NavItem Icon={IconInfo}    label="About" />
       </nav>
 
       {/* Divider */}

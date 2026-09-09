@@ -144,20 +144,13 @@ export const TopBar: React.FC<Props> = ({ detail, health, dataFreshness }) => {
 
       <div style={{ width: 1, height: 20, background: '#E5E7EB' }} />
 
-      {/* AI button (placeholder — not yet implemented) */}
-      <button
-        disabled
-        title="AI Analysis coming in Phase 2"
-        style={{
-          background: '#F3F4F6', color: '#9CA3AF',
-          border: '1px solid #E5E7EB', borderRadius: 20,
-          padding: '8px 16px',
-          fontSize: 13, fontWeight: 500,
-          cursor: 'not-allowed',
-        }}
-      >
-        AI Analysis
-      </button>
+      <span style={{
+        background: '#F8FAFC', color: '#64748B',
+        border: '1px solid #E2E8F0', borderRadius: 20,
+        padding: '7px 12px', fontSize: 11, fontWeight: 600,
+      }}>
+        Source-tracked
+      </span>
     </div>
   );
 };

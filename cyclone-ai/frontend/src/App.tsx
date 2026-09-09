@@ -17,6 +17,8 @@ import { useCyclones, useCycloneDetail } from './hooks/useCyclones';
 import { useSystemStatus } from './hooks/useSystemStatus';
 import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
+import { useDataSources } from './hooks/useCyclones';
+import { OperationsPanel } from './components/OperationsPanel/OperationsPanel';
 
 const App: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -25,6 +27,7 @@ const App: React.FC = () => {
   const { health }                          = useSystemStatus();
   const { cyclones, loading, error: cyErr, response } = useCyclones();
   const { detail, track, forecastTrack }    = useCycloneDetail(selectedId);
+  const { response: dataSources, loading: dataSourcesLoading } = useDataSources();
 
   // Satellite imagery layers (Phase 2b)
   const {
@@ -71,37 +74,48 @@ const App: React.FC = () => {
         dataMode={displayMode}
       />
 
-      {/* Main Map Area */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        <TopBar
-          detail={detail}
-          health={health}
-          dataFreshness={detail?.data_freshness ?? dataFreshness}
-        />
+      <main className="app-workspace">
+        <section className="map-stage">
+          <TopBar
+            detail={detail}
+            health={health}
+            dataFreshness={detail?.data_freshness ?? dataFreshness}
+          />
 
-        <CycloneMap
-          cyclones={cyclones}
-          selectedId={selectedId}
+          <CycloneMap
+            cyclones={cyclones}
+            selectedId={selectedId}
+            track={track}
+            forecastTrack={forecastTrack}
+            dataFreshness={dataFreshness}
+            dataSource={dataSource}
+            onSelectCyclone={toggle}
+            satelliteLayers={satLayers}
+            satelliteEnabled={satEnabled}
+            satelliteOpacities={satOpacities}
+            satelliteDateLabel={satDateLabel}
+            satelliteLoading={satLoading}
+            satelliteError={satError}
+            onToggleSatelliteLayer={satToggle}
+            onSetSatelliteOpacity={satSetOpacity}
+            satelliteCatalogStatus={satelliteCatalog.status}
+            latestSatelliteObservation={satelliteCatalog.latestObservation}
+            satelliteCatalogLoading={satelliteCatalog.loading}
+            satelliteCatalogError={satelliteCatalog.error}
+          />
+        </section>
+        <OperationsPanel
+          detail={detail}
           track={track}
           forecastTrack={forecastTrack}
-          dataFreshness={dataFreshness}
-          dataSource={dataSource}
-          onSelectCyclone={toggle}
-          // Satellite imagery (Phase 2b)
+          health={health}
+          dataSources={dataSources}
+          dataSourcesLoading={dataSourcesLoading}
           satelliteLayers={satLayers}
-          satelliteEnabled={satEnabled}
-          satelliteOpacities={satOpacities}
-          satelliteDateLabel={satDateLabel}
-          satelliteLoading={satLoading}
-          satelliteError={satError}
-          onToggleSatelliteLayer={satToggle}
-          onSetSatelliteOpacity={satSetOpacity}
           satelliteCatalogStatus={satelliteCatalog.status}
           latestSatelliteObservation={satelliteCatalog.latestObservation}
-          satelliteCatalogLoading={satelliteCatalog.loading}
-          satelliteCatalogError={satelliteCatalog.error}
         />
-      </div>
+      </main>
     </div>
   );
 };
