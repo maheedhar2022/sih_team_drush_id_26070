@@ -4,7 +4,7 @@
  * Icons: inline SVG only (no emoji).
  */
 import React from 'react';
-import type { Cyclone } from '../../types/cyclone';
+import type { Cyclone, DataMode } from '../../types/cyclone';
 
 interface Props {
   cyclones: Cyclone[];
@@ -12,7 +12,7 @@ interface Props {
   onSelect: (id: string) => void;
   loading: boolean;
   error: string | null;
-  demoMode: boolean;
+  dataMode: DataMode | 'OFFLINE';
 }
 
 // ---- SVG Icon set (scientific / UI — no emoji) ----------------------------
@@ -61,7 +61,9 @@ const IconCyclone = () => (
 
 // ---- Component ------------------------------------------------------------
 
-export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loading, error, demoMode }) => {
+export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loading, error, dataMode }) => {
+  const isHistorical = dataMode === 'HISTORICAL' || dataMode === 'DEMO';
+  const isOffline = dataMode === 'OFFLINE';
   return (
     <aside style={{
       width: 260,
@@ -152,17 +154,19 @@ export const Sidebar: React.FC<Props> = ({ cyclones, selectedId, onSelect, loadi
       {/* Mode indicator (bottom) */}
       <div style={{ padding: '20px' }}>
         <div style={{
-          background: demoMode ? '#FEF3C7' : '#F3F4F6',
+          background: isHistorical ? '#FEF3C7' : isOffline ? '#FEE2E2' : '#ECFDF5',
           borderRadius: 12,
           padding: '16px',
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: demoMode ? '#92400E' : '#111827', marginBottom: 4 }}>
-            {demoMode ? 'Historical / Demo Mode' : 'Live Data Mode'}
+          <div style={{ fontSize: 12, fontWeight: 600, color: isHistorical ? '#92400E' : isOffline ? '#991B1B' : '#065F46', marginBottom: 4 }}>
+            {isHistorical ? 'Historical Data' : isOffline ? 'Data Service Offline' : 'Live Data'}
           </div>
-          <div style={{ fontSize: 11, color: demoMode ? '#B45309' : '#4B5563', lineHeight: 1.4 }}>
-            {demoMode
-              ? 'Displaying verified historical data: AMPHAN 2020 (IMD/RSMC).'
-              : 'AI analysis is experimental. Follow official IMD warnings.'}
+          <div style={{ fontSize: 11, color: isHistorical ? '#B45309' : isOffline ? '#B91C1C' : '#047857', lineHeight: 1.4 }}>
+            {isHistorical
+              ? 'Verified AMPHAN 2020 historical record from IMD/RSMC.'
+              : isOffline
+                ? 'The dashboard will reconnect automatically when data is available.'
+                : 'Monitoring current source observations. Follow official IMD warnings.'}
           </div>
         </div>
 

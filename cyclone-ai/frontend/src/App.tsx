@@ -47,7 +47,7 @@ const App: React.FC = () => {
   }, [cyclones]);
 
   const toggle  = (id: string) => setSelectedId(prev => prev === id ? null : id);
-  const isDemo  = health?.demo_mode ?? true;
+  const displayMode = response?.data_mode ?? health?.data_mode ?? 'OFFLINE';
 
   // Data freshness from the active cyclones response
   const dataFreshness = response?.data_freshness ?? null;
@@ -68,7 +68,7 @@ const App: React.FC = () => {
         onSelect={toggle}
         loading={loading}
         error={cyErr}
-        demoMode={isDemo}
+        dataMode={displayMode}
       />
 
       {/* Main Map Area */}
