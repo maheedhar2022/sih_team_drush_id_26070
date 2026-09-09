@@ -67,7 +67,7 @@ class IntensityService:
             import torch  # noqa: F401
             import torchvision  # noqa: F401
             import PIL  # noqa: F401
-        except ImportError:
+        except Exception:
             return IntensityStatus(
                 status="DEPENDENCY_UNAVAILABLE", dataset_status="UNKNOWN", model_version=None,
                 architecture=None, dataset_version=None,

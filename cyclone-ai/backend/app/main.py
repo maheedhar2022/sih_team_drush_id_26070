@@ -1,9 +1,9 @@
 """
-CycloneAI — FastAPI Application Entry Point (Phase 4)
+CycloneAI — FastAPI Application Entry Point (Phase 5)
 
 Startup sequence:
   1. CORS middleware
-  2. API routers (health + cyclones + AI detection)
+  2. API routers (health + cyclones + AI detection + intensity)
   3. DB init (create tables if not exist)
   4. Initial data ingest (if DB empty or stale)
   5. Background scheduler start
@@ -32,7 +32,7 @@ logger = logging.getLogger("cyclone_ai")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("=" * 60)
-    logger.info("CycloneAI Backend starting — Phase 4")
+    logger.info("CycloneAI Backend starting — Phase 5")
     logger.info("  Version    : %s", settings.app_version)
     logger.info("  Environment: %s", settings.app_env)
     logger.info("  Database   : %s://[configured]", settings.database_url.split("://", 1)[0])
@@ -80,7 +80,7 @@ app = FastAPI(
     title="CycloneAI API",
     description=(
         "Real-Time AI-Based Tropical Cyclone Monitoring, Analysis, "
-        "Classification and Prediction Platform — Phase 4 API\n\n"
+        "Classification and Prediction Platform — Phase 5 API\n\n"
         "Data sources: IBTrACS v04r01 (NOAA NCEI), IMD/RSMC New Delhi"
     ),
     version=settings.app_version,
@@ -109,7 +109,7 @@ async def root() -> dict:
     return {
         "service": "CycloneAI API",
         "version": settings.app_version,
-        "phase": "4 — AI Cyclone Detection",
+        "phase": "5 — AI Intensity Classification & Estimation",
         "docs": "/api/docs",
         "health": "/api/health",
         "sources": "/api/cyclones/sources/list",

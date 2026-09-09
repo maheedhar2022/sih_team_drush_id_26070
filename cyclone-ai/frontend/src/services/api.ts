@@ -1,18 +1,18 @@
 /**
- * CycloneAI — Typed API Client (Phase 2)
+ * CycloneAI — Typed API Client (Phase 5)
  *
  * All backend communication goes through this module.
  * Base URL is read from VITE_API_URL. Without one, requests stay same-origin,
  * which lets Vercel route /api calls to the serverless backend.
  *
- * New in Phase 2:
- *   fetchForecastTrack() — official RSMC forecast track
- *   fetchDataSources()   — data source registry
+ * New in Phase 5:
+ *   fetchAiIntensity() — real model inference (POST /api/ai/intensity)
  */
 
 import type {
   ActiveCyclonesResponse,
   AiDetectionStatus,
+  AiIntensityResult,
   AiIntensityStatus,
   CycloneDetail,
   CycloneTrack,
@@ -136,4 +136,51 @@ export async function fetchAiDetectionStatus(): Promise<AiDetectionStatus> {
 /** Read model and dataset readiness for Phase 5 intensity analysis. */
 export async function fetchAiIntensityStatus(): Promise<AiIntensityStatus> {
   return apiFetch<AiIntensityStatus>('/api/ai/intensity/status');
+}
+
+/**
+ * Submit raw image bytes to the Phase 5 intensity model.
+ *
+ * The backend returns MODEL_NOT_TRAINED (503) when no checkpoint exists.
+ * This function does NOT throw on 503 — it returns the typed payload so the
+ * UI can display the correct model-unavailable state.
+ */
+export async function fetchAiIntensity(
+  imageBytes: ArrayBuffer,
+  contentType: string,
+  source: string,
+  observationId?: string,
+): Promise<AiIntensityResult> {
+  const params = new URLSearchParams({ source });
+  if (observationId) params.set('observation_id', observationId);
+  const url = `${BASE_URL}/api/ai/intensity?${params}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body: imageBytes,
+    });
+  } catch (err) {
+    throw new ApiError(0, `Network error — backend may be unreachable: ${String(err)}`);
+  }
+
+  // 503 means MODEL_NOT_TRAINED or DEPENDENCY_UNAVAILABLE — return payload, not throw
+  if (response.status === 503 || response.ok) {
+    try {
+      return (await response.json()) as AiIntensityResult;
+    } catch {
+      throw new ApiError(response.status, 'Intensity API returned non-JSON response');
+    }
+  }
+
+  let detail = response.statusText;
+  try {
+    const body = await response.json();
+    detail = body?.detail ?? detail;
+  } catch {
+    // ignore JSON parse errors
+  }
+  throw new ApiError(response.status, detail);
 }

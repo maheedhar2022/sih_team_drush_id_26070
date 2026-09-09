@@ -1,0 +1,15 @@
+{
+  "label_system": "IMD North Indian Ocean",
+  "source": "IBTrACS v04r01 / IMD Best Track",
+  "dataset_version": "imd-ni-v1",
+  "labels": [
+    "Depression",
+    "Deep Depression",
+    "Cyclonic Storm",
+    "Severe Cyclonic Storm",
+    "Very Severe Cyclonic Storm",
+    "Extremely Severe Cyclonic Storm",
+    "Super Cyclonic Storm"
+  ],
+  "_comment": "Only include categories actually present in the assembled dataset. Remove unused labels from this list before training. The training script will reject categories in the manifest that are not in this list."
+}

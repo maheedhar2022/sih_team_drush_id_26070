@@ -29,11 +29,10 @@ def _detect_device() -> str:
         return "cpu"
     if settings.ai_device == "cuda":
         return "cuda"
-    try:
-        import torch  # noqa: PLC0415
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        return "cpu (torch not installed)"
+    # Health must not load the optional native ML runtime.  Inference services
+    # resolve ``auto`` to CUDA or CPU when (and only when) a real checkpoint is
+    # requested, returning a structured dependency error if that runtime fails.
+    return "auto (resolved at inference)"
 
 
 @router.get("/health", response_model=HealthResponse, summary="System health check")

@@ -174,4 +174,9 @@ async def estimate_intensity(
         return JSONResponse(status_code=503, content=IntensityResponse(status="MODEL_NOT_TRAINED", reason=str(exc)).model_dump(mode="json"))
     except ModelDependencyError as exc:
         return JSONResponse(status_code=503, content=IntensityResponse(status="DEPENDENCY_UNAVAILABLE", reason=str(exc)).model_dump(mode="json"))
+    except Exception:
+        return JSONResponse(
+            status_code=500,
+            content=IntensityResponse(status="INFERENCE_ERROR", reason="Intensity inference failed.").model_dump(mode="json"),
+        )
     return IntensityResponse(**result.__dict__)
