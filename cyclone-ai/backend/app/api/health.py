@@ -87,7 +87,7 @@ async def health() -> HealthResponse:
             "ibtracs": "https://www.ncei.noaa.gov/data/international-best-track-archive-for-climate-stewardship-ibtracs/v04r01/access/csv/",
             "rsmc_bulletin": settings.rsmc_bulletin_url,
             "mosdac": settings.mosdac_api_url,
-            "database": settings.database_url.split("///")[0] + "///[configured]",
+            "database": settings.database_url.split("://", 1)[0] + "://[configured]",
         },
         provider_statuses=provider_statuses if provider_statuses else {
             "ibtracs": "pending",
