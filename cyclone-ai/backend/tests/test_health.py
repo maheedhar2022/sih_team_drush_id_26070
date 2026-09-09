@@ -114,6 +114,13 @@ def test_sources_endpoint_exists():
     assert "retrieved_at_utc" in data
 
 
+def test_documented_collection_endpoints_exist():
+    """The documented top-level collection routes remain available."""
+    for path in ("/api/cyclones", "/api/data-sources"):
+        response = client.get(path)
+        assert response.status_code == 200
+
+
 def test_forecast_unavailable_returns_404():
     """Forecast endpoint returns 404 when no forecast data available — not fake data."""
     response = client.get("/api/cyclones/AMPHAN_2020_NI/forecast")

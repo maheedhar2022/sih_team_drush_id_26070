@@ -35,7 +35,13 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.db.models import CycloneObservation, CycloneRecord, DataSource
+from app.db.models import (
+    Cyclone as CycloneEntity,
+    CycloneForecast,
+    CycloneObservation,
+    CycloneRecord,
+    DataSource,
+)
 from app.db.session import AsyncSessionLocal
 from app.providers.base import RawObservation, ProviderResult, ProviderStatus
 from app.providers.registry import get_registry
@@ -106,6 +112,28 @@ def _validate_obs(obs: RawObservation) -> list[str]:
     return errors
 
 
+def _validate_forecast(forecast) -> list[str]:
+    """Validate an official forecast point before persisting it."""
+    errors: list[str] = []
+
+    if not forecast.cyclone_id:
+        errors.append("cyclone_id missing")
+    if not forecast.source:
+        errors.append("source attribution missing")
+    if not (-90 <= forecast.latitude <= 90):
+        errors.append(f"latitude {forecast.latitude} out of range")
+    if not (-180 <= forecast.longitude <= 180):
+        errors.append(f"longitude {forecast.longitude} out of range")
+    if forecast.issued_at_utc.tzinfo is None or forecast.valid_at_utc.tzinfo is None:
+        errors.append("forecast timestamps must be timezone-aware")
+    elif forecast.valid_at_utc < forecast.issued_at_utc:
+        errors.append("forecast valid time precedes issue time")
+    if forecast.forecast_hour < 0:
+        errors.append("forecast hour must be non-negative")
+
+    return errors
+
+
 def _normalise(obs: RawObservation, processed_at: datetime) -> CycloneObservation:
     """
     Convert a validated RawObservation → normalised CycloneObservation.
@@ -164,6 +192,30 @@ async def _upsert_data_source(session: AsyncSession, provider_name: str,
     src.last_error = error
 
 
+async def _upsert_cyclone(session: AsyncSession, obs: RawObservation) -> None:
+    """Create or refresh cyclone identity metadata without touching observations."""
+    result = await session.execute(
+        select(CycloneEntity).where(CycloneEntity.cyclone_id == obs.cyclone_id)
+    )
+    cyclone = result.scalar_one_or_none()
+
+    if cyclone is None:
+        session.add(CycloneEntity(
+            cyclone_id=obs.cyclone_id,
+            cyclone_name=obs.cyclone_name,
+            basin=obs.basin,
+            status="ACTIVE",
+            source=obs.source,
+            source_id=obs.cyclone_id,
+        ))
+        return
+
+    cyclone.cyclone_name = obs.cyclone_name
+    cyclone.basin = obs.basin
+    cyclone.status = "ACTIVE"
+    cyclone.source = obs.source
+
+
 async def ingest_all() -> dict[str, int]:
     """
     Main ingestion entry point. Fetch from all providers and persist.
@@ -208,6 +260,8 @@ async def ingest_all() -> dict[str, int]:
                     )
                     continue
 
+                await _upsert_cyclone(session, obs)
+
                 # Write raw record (audit log) — ignore conflict
                 raw_rec = CycloneRecord(
                     sid=obs.cyclone_id,
@@ -250,6 +304,44 @@ async def ingest_all() -> dict[str, int]:
                         inserted += 1
                     except Exception:
                         await session.rollback()
+
+            # Persist official forecast points separately from observed tracks.
+            for forecast in result.forecasts:
+                errors = _validate_forecast(forecast)
+                if errors:
+                    logger.warning(
+                        "Forecast validation failed for %s@%s: %s",
+                        forecast.cyclone_id,
+                        forecast.valid_at_utc,
+                        errors,
+                    )
+                    continue
+
+                existing_forecast = await session.execute(
+                    select(CycloneForecast).where(
+                        CycloneForecast.cyclone_id == forecast.cyclone_id,
+                        CycloneForecast.issued_at_utc == forecast.issued_at_utc,
+                        CycloneForecast.valid_at_utc == forecast.valid_at_utc,
+                    )
+                )
+                if existing_forecast.scalar_one_or_none() is not None:
+                    continue
+
+                session.add(CycloneForecast(
+                    cyclone_id=forecast.cyclone_id,
+                    cyclone_name=forecast.cyclone_name,
+                    issued_at_utc=forecast.issued_at_utc,
+                    valid_at_utc=forecast.valid_at_utc,
+                    forecast_hour=forecast.forecast_hour,
+                    latitude=forecast.latitude,
+                    longitude=forecast.longitude,
+                    wind_speed_kmh=forecast.wind_speed_kmh,
+                    pressure_hpa=forecast.pressure_hpa,
+                    intensity_category=forecast.intensity_category,
+                    source=forecast.source,
+                    source_url=forecast.source_url,
+                    received_at_utc=forecast.received_at_utc,
+                ))
 
             counts[provider_name] = inserted
             logger.info("Provider %s: %d new observations inserted", provider_name, inserted)
@@ -296,6 +388,30 @@ async def get_cyclone_track(cyclone_id: str) -> list[CycloneObservation]:
             select(CycloneObservation)
             .where(CycloneObservation.cyclone_id == cyclone_id)
             .order_by(CycloneObservation.timestamp_utc)
+        )
+        return result.scalars().all()
+
+
+async def get_latest_cyclone_forecast(cyclone_id: str) -> list[CycloneForecast]:
+    """Return all points for the most recently issued official forecast."""
+    async with AsyncSessionLocal() as session:
+        latest_issue_result = await session.execute(
+            select(CycloneForecast.issued_at_utc)
+            .where(CycloneForecast.cyclone_id == cyclone_id)
+            .order_by(CycloneForecast.issued_at_utc.desc())
+            .limit(1)
+        )
+        latest_issue = latest_issue_result.scalar_one_or_none()
+        if latest_issue is None:
+            return []
+
+        result = await session.execute(
+            select(CycloneForecast)
+            .where(
+                CycloneForecast.cyclone_id == cyclone_id,
+                CycloneForecast.issued_at_utc == latest_issue,
+            )
+            .order_by(CycloneForecast.valid_at_utc)
         )
         return result.scalars().all()
 

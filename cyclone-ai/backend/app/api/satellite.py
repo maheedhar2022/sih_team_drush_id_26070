@@ -172,6 +172,16 @@ async def list_satellite_layers(
 
 
 @router.get(
+    "/latest",
+    response_model=SatelliteLayersListResponse,
+    summary="List the latest available satellite imagery layers",
+)
+async def list_latest_satellite_layers() -> SatelliteLayersListResponse:
+    """Return dated, availability-checked layers for the latest NRT observation day."""
+    return await list_satellite_layers(date=None)
+
+
+@router.get(
     "/tile/{layer_id}/{z}/{y}/{x}",
     summary="Proxy a satellite tile from NASA GIBS",
     responses={

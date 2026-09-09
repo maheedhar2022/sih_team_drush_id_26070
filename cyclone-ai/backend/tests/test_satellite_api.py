@@ -49,10 +49,13 @@ async def test_list_satellite_layers(mock_layers_result):
     """GET /api/satellite/layers returns layer list."""
     with patch(
         "app.api.satellite.get_satellite_provider"
-    ) as mock_provider_fn:
+    ) as mock_provider_fn, patch(
+        "app.api.satellite.get_mosdac_provider"
+    ) as mock_mosdac_provider_fn:
         mock_provider = MagicMock()
         mock_provider.get_layers = AsyncMock(return_value=mock_layers_result)
         mock_provider_fn.return_value = mock_provider
+        mock_mosdac_provider_fn.return_value.is_configured = False
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -76,10 +79,13 @@ async def test_list_satellite_layers_with_date(mock_layers_result):
     """GET /api/satellite/layers?date=2024-05-20 accepts a date parameter."""
     with patch(
         "app.api.satellite.get_satellite_provider"
-    ) as mock_provider_fn:
+    ) as mock_provider_fn, patch(
+        "app.api.satellite.get_mosdac_provider"
+    ) as mock_mosdac_provider_fn:
         mock_provider = MagicMock()
         mock_provider.get_layers = AsyncMock(return_value=mock_layers_result)
         mock_provider_fn.return_value = mock_provider
+        mock_mosdac_provider_fn.return_value.is_configured = False
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -114,6 +120,25 @@ async def test_satellite_disabled():
     data = resp.json()
     assert data["layers"] == []
     assert "disabled" in data["note"].lower()
+
+
+@pytest.mark.asyncio
+async def test_latest_satellite_layers_uses_layer_response(mock_layers_result):
+    """GET /api/satellite/latest returns the latest dated layer metadata."""
+    with patch("app.api.satellite.get_satellite_provider") as mock_provider_fn, patch(
+        "app.api.satellite.get_mosdac_provider"
+    ) as mock_mosdac_provider_fn:
+        mock_provider = MagicMock()
+        mock_provider.get_layers = AsyncMock(return_value=mock_layers_result)
+        mock_provider_fn.return_value = mock_provider
+        mock_mosdac_provider_fn.return_value.is_configured = False
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/satellite/latest")
+
+    assert resp.status_code == 200
+    assert resp.json()["layers"][0]["layer_id"] == "MODIS_Terra_CorrectedReflectance_TrueColor"
 
 
 @pytest.mark.asyncio

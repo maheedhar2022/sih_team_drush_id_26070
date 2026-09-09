@@ -26,6 +26,7 @@ Limitations:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -227,21 +228,18 @@ class SatelliteProvider:
         now = datetime.now(timezone.utc)
 
         if target_date is None:
-            # Use 'default' keyword — GIBS returns the latest available imagery
-            date_str = "default"
-            date_label = "Latest Available"
-        else:
-            date_str = target_date.strftime("%Y-%m-%d")
-            date_label = target_date.strftime("%d %b %Y")
+            target_date = now - timedelta(days=1)
+
+        date_str = target_date.strftime("%Y-%m-%d")
+        date_label = target_date.strftime("%d %b %Y")
+
+        availability = await asyncio.gather(
+            *(self.check_tile_available(layer, date_str) for layer in GIBS_LAYERS)
+        )
 
         layers: List[SatelliteLayerInfo] = []
 
-        for layer_def in GIBS_LAYERS:
-            # Skip slow HEAD probes when using 'default' — tiles are always available
-            if date_str == "default":
-                available, error = True, None
-            else:
-                available, error = await self.check_tile_available(layer_def, date_str)
+        for layer_def, (available, error) in zip(GIBS_LAYERS, availability):
 
             layers.append(SatelliteLayerInfo(
                 layer_id=layer_def.layer_id,
@@ -253,7 +251,7 @@ class SatelliteProvider:
                 image_format=layer_def.image_format,
                 default_opacity=layer_def.default_opacity,
                 max_zoom=layer_def.max_zoom,
-                timestamp_utc=f"{date_str}T00:00:00Z" if date_str != "default" else now.isoformat(),
+                timestamp_utc=f"{date_str}T00:00:00Z",
                 date_label=date_label,
                 source=layer_def.attribution,
                 source_url=self._source_url(layer_def),
@@ -289,4 +287,3 @@ def get_satellite_provider() -> SatelliteProvider:
     if _provider is None:
         _provider = SatelliteProvider()
     return _provider
-

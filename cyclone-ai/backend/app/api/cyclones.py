@@ -37,6 +37,7 @@ from app.schemas.cyclone import (
     DataMode,
     DataSourceInfo,
     DataSourcesResponse,
+    ForecastPoint,
     ForecastTrack,
     IntensityCategory,
     TrackPoint,
@@ -46,6 +47,7 @@ from app.services.ingestion import (
     get_cyclone_track,
     get_data_sources,
     get_last_ingestion_time,
+    get_latest_cyclone_forecast,
 )
 from app.services.demo_data import (
     get_demo_cyclone_detail,
@@ -130,6 +132,16 @@ def _obs_to_track_point(obs: CycloneObservation) -> TrackPoint:
 # ---------------------------------------------------------------------------
 
 @router.get(
+    "",
+    response_model=ActiveCyclonesResponse,
+    summary="List current and historical-fallback cyclone systems",
+)
+async def list_cyclones() -> ActiveCyclonesResponse:
+    """Backward-compatible collection endpoint for the documented API contract."""
+    return await list_active_cyclones()
+
+
+@router.get(
     "/active",
     response_model=ActiveCyclonesResponse,
     summary="List active NI basin cyclone systems",
@@ -154,8 +166,13 @@ async def list_active_cyclones() -> ActiveCyclonesResponse:
         active_obs = await get_active_ni_storms(max_age_hours=48)
     except Exception as exc:
         logger.exception("DB query for active storms failed: %s", exc)
-        # Fall through to historical — DB unavailable
-        active_obs = []
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Cyclone observations are temporarily unavailable. "
+                "Historical mode is not used as a substitute for an unavailable database."
+            ),
+        ) from exc
 
     if active_obs:
         # Live/recent storms found
@@ -330,8 +347,32 @@ async def get_cyclone_forecast(cyclone_id: str) -> ForecastTrack:
     Currently requires RSMC_BULLETIN_ENABLED=true and an active storm.
     Returns 404 when no forecast is available (no fabrication).
     """
-    # Forecast data is only available via RSMC bulletin (when enabled)
-    # No forecast data stored yet → explicit 404
+    forecast_rows = await get_latest_cyclone_forecast(cyclone_id)
+    if forecast_rows:
+        latest = forecast_rows[0]
+        return ForecastTrack(
+            cyclone_id=cyclone_id,
+            cyclone_name=latest.cyclone_name or cyclone_id,
+            issued_at_utc=latest.issued_at_utc,
+            source=latest.source,
+            source_url=latest.source_url,
+            points=[
+                ForecastPoint(
+                    issued_at_utc=row.issued_at_utc,
+                    valid_at_utc=row.valid_at_utc,
+                    forecast_hour=row.forecast_hour,
+                    latitude=row.latitude,
+                    longitude=row.longitude,
+                    wind_speed_kmh=row.wind_speed_kmh,
+                    pressure_hpa=row.pressure_hpa,
+                    intensity=_intensity_from_str(row.intensity_category),
+                    source=row.source,
+                    source_url=row.source_url,
+                )
+                for row in forecast_rows
+            ],
+        )
+
     raise HTTPException(
         status_code=404,
         detail=(

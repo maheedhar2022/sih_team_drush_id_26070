@@ -21,13 +21,15 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from app.providers.base import RawObservation, ProviderResult, ProviderStatus
+from app.providers.base import RawForecastPoint, RawObservation, ProviderResult, ProviderStatus
 from app.services.ingestion import (
     _validate_obs,
     _normalise,
     _compute_freshness,
     _kt_to_kmh,
+    _validate_forecast,
 )
+from app.db.models import Cyclone as CycloneEntity
 
 
 def _obs(**kwargs) -> RawObservation:
@@ -125,6 +127,53 @@ def test_none_pressure_accepted():
     """Missing pressure is valid — stored as NULL, not fabricated."""
     errors = _validate_obs(_obs(central_pressure=None))
     assert errors == []
+
+
+def test_forecast_with_valid_times_passes():
+    now = datetime.now(timezone.utc)
+    forecast = RawForecastPoint(
+        cyclone_id="2020136N10088",
+        cyclone_name="AMPHAN",
+        issued_at_utc=now,
+        valid_at_utc=now + timedelta(hours=6),
+        forecast_hour=6,
+        latitude=14.5,
+        longitude=86.3,
+        wind_speed_kmh=185.0,
+        pressure_hpa=940.0,
+        intensity_category="Extremely Severe Cyclonic Storm",
+        source="RSMC New Delhi",
+        source_url="https://example.com/bulletin",
+    )
+    assert _validate_forecast(forecast) == []
+
+
+def test_forecast_with_invalid_valid_time_fails():
+    now = datetime.now(timezone.utc)
+    forecast = RawForecastPoint(
+        cyclone_id="2020136N10088",
+        cyclone_name="AMPHAN",
+        issued_at_utc=now,
+        valid_at_utc=now - timedelta(hours=6),
+        forecast_hour=6,
+        latitude=14.5,
+        longitude=86.3,
+        wind_speed_kmh=None,
+        pressure_hpa=None,
+        intensity_category=None,
+        source="RSMC New Delhi",
+        source_url="https://example.com/bulletin",
+    )
+    assert "forecast valid time precedes issue time" in _validate_forecast(forecast)
+
+
+def test_cyclone_metadata_model_has_required_fields():
+    """Cyclone identity is persisted independently from observations."""
+    column_names = set(CycloneEntity.__table__.columns.keys())
+    assert {
+        "cyclone_id", "cyclone_name", "basin", "status", "source",
+        "source_id", "created_at", "updated_at",
+    } <= column_names
 
 
 # ---------------------------------------------------------------------------
