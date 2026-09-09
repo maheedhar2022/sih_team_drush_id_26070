@@ -59,6 +59,14 @@ def test_cyclone_detail_returns_200():
     assert response.status_code == 200
 
 
+def test_historical_amphan_identifier_with_hyphens_is_supported():
+    response = client.get("/api/cyclones/AMPHAN-2020-NI")
+    track_response = client.get("/api/cyclones/AMPHAN-2020-NI/track")
+
+    assert response.status_code == 200
+    assert track_response.status_code == 200
+
+
 def test_cyclone_detail_schema():
     response = client.get(f"/api/cyclones/{DEMO_CYCLONE_ID}")
     data = response.json()

@@ -251,9 +251,14 @@ def get_demo_cyclones() -> List[Cyclone]:
     ]
 
 
+def _is_amphan_historical_id(cyclone_id: str) -> bool:
+    """Accept identifiers emitted by older persisted historical records."""
+    return cyclone_id.replace("-", "_") == "AMPHAN_2020_NI"
+
+
 def get_demo_cyclone_detail(cyclone_id: str) -> Optional[CycloneDetail]:
     """Return detail for a demo cyclone by ID."""
-    if cyclone_id != "AMPHAN_2020_NI":
+    if not _is_amphan_historical_id(cyclone_id):
         return None
     return CycloneDetail(
         id="AMPHAN_2020_NI",
@@ -292,7 +297,7 @@ def get_demo_cyclone_detail(cyclone_id: str) -> Optional[CycloneDetail]:
 
 def get_demo_cyclone_track(cyclone_id: str) -> Optional[CycloneTrack]:
     """Return the historical track for a demo cyclone."""
-    if cyclone_id != "AMPHAN_2020_NI":
+    if not _is_amphan_historical_id(cyclone_id):
         return None
     return CycloneTrack(
         cyclone_id="AMPHAN_2020_NI",
