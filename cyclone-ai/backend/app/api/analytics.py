@@ -228,6 +228,9 @@ async def seasonal_statistics(year: int) -> dict:
 @router.get(
     "/export/cyclone/{cyclone_id}",
     summary="Export cyclone track data as CSV, JSON, or GeoJSON",
+    # CSV streams and JSON/GeoJSON payloads intentionally have different
+    # response shapes, so FastAPI must not infer one Pydantic response model.
+    response_model=None,
 )
 async def export_cyclone(
     cyclone_id: str,

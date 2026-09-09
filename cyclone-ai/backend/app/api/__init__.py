@@ -13,9 +13,11 @@ api_router = APIRouter()
 api_router.include_router(ai_router)
 api_router.include_router(analytics_router)
 api_router.include_router(health_router)
+# The live route must be registered before the generic
+# /api/cyclones/{cyclone_id} endpoint, otherwise "live" is parsed as an ID.
+api_router.include_router(realtime_router)
 api_router.include_router(cyclones_router)
 api_router.include_router(data_sources_router)
-api_router.include_router(realtime_router)
 api_router.include_router(satellite_router)
 
 __all__ = ["api_router"]

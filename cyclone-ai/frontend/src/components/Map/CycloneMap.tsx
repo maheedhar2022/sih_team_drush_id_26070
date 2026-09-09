@@ -55,18 +55,6 @@ const MAP_STYLE: StyleSpecification = {
   ],
 };
 
-// ---- Marker (legacy fallback — used when no realtime data) ----------------
-function makeMarkerEl(color: string, selected: boolean, label: string): HTMLDivElement {
-  return createAnimatedCycloneMarker({
-    name: label,
-    category: null,
-    windKmh: null,
-    pressureHpa: null,
-    selected,
-    isLive: false,
-  });
-}
-
 function markerColor(cat: string | null | undefined): string {
   return intensityColor(cat);
 }

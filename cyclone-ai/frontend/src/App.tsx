@@ -19,6 +19,7 @@ import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
 import { useAiDetectionStatus } from './hooks/useAiDetectionStatus';
 import { useAiIntensityStatus } from './hooks/useAiIntensityStatus';
+import { useRealtimeTracking } from './hooks/useRealtimeTracking';
 import { AiAnalysisPanel } from './components/AiAnalysis/AiAnalysisPanel';
 
 const App: React.FC = () => {
@@ -44,6 +45,7 @@ const App: React.FC = () => {
   const satelliteCatalog = useSatelliteCatalog();
   const aiDetection = useAiDetectionStatus();
   const aiIntensity = useAiIntensityStatus();
+  const realtimeTracking = useRealtimeTracking();
 
   useEffect(() => {
     if (!selectedInitialSystem.current && cyclones.length > 0) {
@@ -106,6 +108,8 @@ const App: React.FC = () => {
             latestSatelliteObservation={satelliteCatalog.latestObservation}
             satelliteCatalogLoading={satelliteCatalog.loading}
             satelliteCatalogError={satelliteCatalog.error}
+            realtimePositions={realtimeTracking.positions}
+            realtimeConnected={realtimeTracking.connected}
           />
           <AiAnalysisPanel
             open={aiLabOpen}
