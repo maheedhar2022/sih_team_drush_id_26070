@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -283,11 +283,14 @@ async def ingest_all() -> dict[str, int]:
                     raw_data=obs.raw_data,
                 )
                 try:
-                    session.add(raw_rec)
-                    await session.flush()
-                except Exception:
-                    await session.rollback()
-                    # Duplicate — expected and fine
+                    async with session.begin_nested():
+                        session.add(raw_rec)
+                        await session.flush()
+                except Exception as exc:
+                    logger.debug(
+                        "Raw record %s@%s already exists (expected): %s",
+                        obs.cyclone_id, obs.timestamp_utc, exc,
+                    )
 
                 # Write normalised observation (dedup by cyclone_id + ts)
                 norm = _normalise(obs, processed_at)
@@ -298,12 +301,16 @@ async def ingest_all() -> dict[str, int]:
                     )
                 )
                 if existing.scalar_one_or_none() is None:
-                    session.add(norm)
                     try:
-                        await session.flush()
+                        async with session.begin_nested():
+                            session.add(norm)
+                            await session.flush()
                         inserted += 1
-                    except Exception:
-                        await session.rollback()
+                    except Exception as exc:
+                        logger.debug(
+                            "Observation %s@%s duplicate (expected): %s",
+                            norm.cyclone_id, norm.timestamp_utc, exc,
+                        )
 
             # Persist official forecast points separately from observed tracks.
             for forecast in result.forecasts:

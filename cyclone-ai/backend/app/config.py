@@ -91,6 +91,24 @@ class Settings(BaseSettings):
     ai_device: str = "auto"   # auto | cuda | cpu
     ai_max_image_mb: int = 10
 
+    # ── New APIs (Phase 5) ────────────────────────────────────────────────────
+    # Search
+    search_max_results: int = 100
+
+    # IMD colour-coded alert thresholds (km/h, 3-min sustained wind)
+    alert_yellow_wind_kmh: float = 62.0    # Cyclonic Storm
+    alert_orange_wind_kmh: float = 88.0    # Severe Cyclonic Storm
+    alert_red_wind_kmh: float = 118.0      # Very Severe Cyclonic Storm
+
+    # Risk-zone GeoJSON ring radii (km) — outermost to innermost
+    risk_zone_radii_km: List[float] = [350.0, 200.0, 100.0]
+
+    # Seasonal statistics
+    stats_min_year: int = 2000
+
+    # Export
+    export_formats: str = "csv,geojson,json"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

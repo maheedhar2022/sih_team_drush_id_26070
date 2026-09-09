@@ -29,6 +29,8 @@ import type {
   SatelliteLayerSpec,
   SatelliteObservation,
 } from '../../types/cyclone';
+import type { AnimatedPosition } from '../../hooks/useRealtimeTracking';
+import { createAnimatedCycloneMarker, intensityColor } from './AnimatedCycloneMarker';
 
 // Vite does not automatically emit MapLibre's separate module worker. Pointing
 // MapLibre at the bundled URL prevents a production-only worker 404/MIME error.
@@ -53,51 +55,20 @@ const MAP_STYLE: StyleSpecification = {
   ],
 };
 
-// ---- Marker ---------------------------------------------------------------
+// ---- Marker (legacy fallback — used when no realtime data) ----------------
 function makeMarkerEl(color: string, selected: boolean, label: string): HTMLDivElement {
-  const el = document.createElement('div');
-  el.style.cssText = `
-    background: #FFFFFF;
-    border: 1.5px solid ${selected ? '#111827' : '#E5E7EB'};
-    border-radius: 20px;
-    padding: 4px 8px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    cursor: pointer;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-    font-family: 'Inter', sans-serif;
-    transition: all 0.2s ease;
-    transform: ${selected ? 'scale(1.1)' : 'scale(1)'};
-    z-index: ${selected ? 10 : 1};
-  `;
-
-  // Icon — small SVG spiral indicator
-  const icon = document.createElement('div');
-  icon.style.cssText = `
-    width: 16px; height: 16px;
-    background: ${color}22;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-  `;
-  icon.innerHTML = `<svg viewBox="0 0 24 24" width="10" height="10" stroke="${color}" stroke-width="2.5" fill="none"><circle cx="12" cy="12" r="3"/><path d="M12 2a10 10 0 1 0 0 20"/></svg>`;
-
-  const text = document.createElement('div');
-  text.style.cssText = `font-size: 11px; font-weight: 600; color: #111827;`;
-  text.innerText = label;
-
-  el.appendChild(icon);
-  el.appendChild(text);
-  return el;
+  return createAnimatedCycloneMarker({
+    name: label,
+    category: null,
+    windKmh: null,
+    pressureHpa: null,
+    selected,
+    isLive: false,
+  });
 }
 
 function markerColor(cat: string | null | undefined): string {
-  if (!cat) return '#6B7280';
-  if (cat.includes('Super'))       return '#DC2626';
-  if (cat.includes('Extremely'))   return '#EF4444';
-  if (cat.includes('Very Severe')) return '#F97316';
-  if (cat.includes('Severe'))      return '#F59E0B';
-  return '#3B82F6';
+  return intensityColor(cat);
 }
 
 // ---- Channel icons --------------------------------------------------------
@@ -129,6 +100,9 @@ interface Props {
   latestSatelliteObservation?: SatelliteObservation | null;
   satelliteCatalogLoading?: boolean;
   satelliteCatalogError?: string | null;
+  // Real-time tracking
+  realtimePositions?: AnimatedPosition[];
+  realtimeConnected?: boolean;
 }
 
 export const CycloneMap: React.FC<Props> = ({
@@ -139,6 +113,7 @@ export const CycloneMap: React.FC<Props> = ({
   onToggleSatelliteLayer, onSetSatelliteOpacity,
   latestSatelliteObservation = null,
   satelliteCatalogLoading = false, satelliteCatalogError = null,
+  realtimePositions = [], realtimeConnected = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<maplibregl.Map | null>(null);
@@ -318,41 +293,72 @@ export const CycloneMap: React.FC<Props> = ({
   useEffect(() => { drawTrack(); }, [drawTrack]);
   useEffect(() => { drawForecastTrack(); }, [drawForecastTrack]);
 
-  // Markers
+  // Markers — use animated markers with real-time positions when available
   useEffect(() => {
     const m = mapRef.current;
     if (!m || !loaded) return;
+
+    // Build a map of real-time positions by cyclone ID for quick lookup
+    const rtMap = new Map(realtimePositions.map(p => [p.cyclone_id, p]));
+
+    // Remove markers for cyclones that no longer exist
     markerMap.current.forEach((mk, id) => {
       if (!cyclones.find(c => c.id === id)) { mk.remove(); markerMap.current.delete(id); }
     });
+
     cyclones.forEach(c => {
-      const sel   = c.id === selectedId;
-      const color = markerColor(c.intensity);
-      const el    = makeMarkerEl(color, sel, c.name);
+      const sel = c.id === selectedId;
+      const rt = rtMap.get(c.id);
+      const isLive = !!rt;
+
+      // Use animated position if available, otherwise static
+      const displayLat = rt ? rt.animLat : c.latitude;
+      const displayLon = rt ? rt.animLon : c.longitude;
+
+      // Create animated marker element
+      const el = createAnimatedCycloneMarker({
+        name: c.name,
+        category: c.intensity,
+        windKmh: c.wind_speed_kmh,
+        pressureHpa: c.pressure_hpa,
+        selected: sel,
+        isLive,
+      });
       el.addEventListener('click', (e) => { e.stopPropagation(); onSelectCyclone(c.id); });
 
+      const color = markerColor(c.intensity);
       const popup = new maplibregl.Popup({
-        closeButton: false, closeOnClick: false, offset: 12,
+        closeButton: false, closeOnClick: false, offset: 30,
       }).setHTML(`
-        <div style="font-size:12px;font-weight:600;color:#111827;">${c.name}</div>
-        ${c.intensity ? `<div style="font-size:10px;color:${color};margin-top:2px;">${c.intensity}</div>` : ''}
-        <div style="font-size:10px;color:#6B7280;margin-top:2px;">${c.wind_speed_kmh ?? '--'} km/h · ${c.pressure_hpa ?? '--'} hPa</div>
+        <div style="font-family:'Inter',sans-serif;padding:4px 0;">
+          <div style="font-size:13px;font-weight:700;color:#111827;">${c.name}</div>
+          ${c.intensity ? `<div style="font-size:11px;color:${color};margin-top:3px;font-weight:600;">${c.intensity}</div>` : ''}
+          <div style="font-size:11px;color:#6B7280;margin-top:3px;">
+            💨 ${c.wind_speed_kmh ?? '--'} km/h &nbsp;·&nbsp; 🌀 ${c.pressure_hpa ?? '--'} hPa
+          </div>
+          ${isLive ? '<div style="font-size:9px;color:#10B981;margin-top:4px;font-weight:600;">● LIVE TRACKING</div>' : ''}
+        </div>
       `);
       el.addEventListener('mouseenter', () => popup.addTo(m));
       el.addEventListener('mouseleave', () => popup.remove());
 
       const existing = markerMap.current.get(c.id);
       if (existing) {
-        existing.setLngLat([c.longitude, c.latitude]);
-        existing.getElement().replaceWith(el);
+        // Smoothly update position
+        existing.setLngLat([displayLon, displayLat]);
+        // Replace element to update animation state
+        const oldEl = existing.getElement();
+        if (oldEl.parentNode) {
+          oldEl.parentNode.replaceChild(el, oldEl);
+        }
       } else {
         const mk = new maplibregl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([c.longitude, c.latitude])
+          .setLngLat([displayLon, displayLat])
           .addTo(m);
         markerMap.current.set(c.id, mk);
       }
     });
-  }, [cyclones, selectedId, loaded, onSelectCyclone]);
+  }, [cyclones, selectedId, loaded, onSelectCyclone, realtimePositions]);
 
   // Fly to selected
   useEffect(() => {
@@ -373,6 +379,9 @@ export const CycloneMap: React.FC<Props> = ({
 
       {/* ── DATA MODE badge — dynamic (LIVE / HISTORICAL / DEMO) ──────── */}
       <DataModeBadge freshness={dataFreshness ?? 'DEMO'} source={dataSource} />
+
+      {/* ── REAL-TIME STATUS badge ────────────────────────────────────── */}
+      <RealtimeStatusBadge connected={realtimeConnected} positionCount={realtimePositions.length} />
 
       {/* ── MAP LEGEND ────────────────────────────────────────────────── */}
       <MapLegend activeSatCount={activeSatCount} satelliteDateLabel={satelliteDateLabel} />
@@ -949,6 +958,41 @@ function DataModeBadge({ freshness, source }: { freshness: string; source?: stri
           {sourceLabel}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---- Real-Time Status Badge ------------------------------------------------
+function RealtimeStatusBadge({ connected, positionCount }: { connected: boolean; positionCount: number }) {
+  return (
+    <div style={{
+      position: 'absolute', top: 12, left: 12, zIndex: 20,
+      background: connected ? '#ECFDF5' : '#FEF2F2',
+      border: `1px solid ${connected ? '#6EE7B7' : '#FECACA'}`,
+      borderRadius: 8,
+      padding: '5px 10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
+      fontSize: 11,
+      fontWeight: 600,
+      color: connected ? '#065F46' : '#991B1B',
+      fontFamily: "'Inter', system-ui, sans-serif",
+      transition: 'all 0.3s ease',
+    }}>
+      <div style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: connected ? '#10B981' : '#EF4444',
+        boxShadow: connected ? '0 0 6px #10B981' : 'none',
+        animation: connected ? 'cyclone-pulse 2s ease-in-out infinite' : 'none',
+      }} />
+      {connected
+        ? `LIVE${positionCount > 0 ? ` · ${positionCount} storm${positionCount !== 1 ? 's' : ''}` : ''}`
+        : 'CONNECTING...'
+      }
     </div>
   );
 }

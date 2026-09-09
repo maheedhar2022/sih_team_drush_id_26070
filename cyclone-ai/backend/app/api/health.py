@@ -15,6 +15,7 @@ from fastapi import APIRouter
 from app.config import get_settings
 from app.schemas.cyclone import DataMode, DataFreshness, HealthResponse, SystemStatus
 from app.providers.registry import get_registry
+from app.services.demo_data import AMPHAN_IBTRACS_SID
 from app.services.ingestion import get_last_ingestion_time, get_active_ni_storms
 
 router = APIRouter(prefix="/api", tags=["health"])
@@ -59,7 +60,7 @@ async def health() -> HealthResponse:
         last_ingest = await get_last_ingestion_time()
         active_obs = await get_active_ni_storms(max_age_hours=48)
         # Exclude historical fallback from count
-        active_count = sum(1 for o in active_obs if o.cyclone_id != "2020136N10088")
+        active_count = sum(1 for o in active_obs if o.cyclone_id != AMPHAN_IBTRACS_SID)
     except Exception:
         pass
 

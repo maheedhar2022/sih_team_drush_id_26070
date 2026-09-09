@@ -13,6 +13,7 @@
 import type {
   ActiveCyclonesResponse,
   AiDetectionStatus,
+  AiIntensityStatus,
   CycloneDetail,
   CycloneTrack,
   DataSourcesResponse,
@@ -130,4 +131,9 @@ export async function fetchSatelliteObservations(): Promise<SatelliteObservation
 /** Read model readiness. This endpoint never creates a prediction. */
 export async function fetchAiDetectionStatus(): Promise<AiDetectionStatus> {
   return apiFetch<AiDetectionStatus>('/api/ai/detection/status');
+}
+
+/** Read model and dataset readiness for Phase 5 intensity analysis. */
+export async function fetchAiIntensityStatus(): Promise<AiIntensityStatus> {
+  return apiFetch<AiIntensityStatus>('/api/ai/intensity/status');
 }

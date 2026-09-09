@@ -1,17 +1,20 @@
 import React from 'react';
 
-import type { AiDetectionStatus } from '../../types/cyclone';
+import type { AiDetectionStatus, AiIntensityStatus } from '../../types/cyclone';
 
 interface Props {
   open: boolean;
   status: AiDetectionStatus | null;
   loading: boolean;
   error: string | null;
+  intensityStatus: AiIntensityStatus | null;
+  intensityLoading: boolean;
+  intensityError: string | null;
   onClose: () => void;
 }
 
 /** A small scientific-status drawer, never a substitute for official warnings. */
-export const AiAnalysisPanel: React.FC<Props> = ({ open, status, loading, error, onClose }) => {
+export const AiAnalysisPanel: React.FC<Props> = ({ open, status, loading, error, intensityStatus, intensityLoading, intensityError, onClose }) => {
   if (!open) return null;
   const ready = status?.status === 'READY';
 
@@ -48,6 +51,25 @@ export const AiAnalysisPanel: React.FC<Props> = ({ open, status, loading, error,
           <div style={{ marginTop: 9, paddingTop: 9, borderTop: '1px solid #F3F4F6', color: '#6B7280' }}>AI prediction: not implemented in Phase 4.</div>
         </div>
       )}
+
+      <section style={{ marginTop: 13, paddingTop: 11, borderTop: '1px solid #F3F4F6', fontSize: 12, lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 700, color: '#111827' }}>Intensity Classification & Estimation</div>
+        {intensityLoading && <div style={{ marginTop: 4, color: '#6B7280' }}>Checking model availability...</div>}
+        {intensityError && <div style={{ marginTop: 4, color: '#B91C1C' }}>Intensity analysis status could not be loaded.</div>}
+        {!intensityLoading && !intensityError && intensityStatus?.status === 'READY' && (
+          <div style={{ marginTop: 4, color: '#047857' }}>
+            Model ready. No estimate is shown until a validated source image is submitted.
+          </div>
+        )}
+        {!intensityLoading && !intensityError && intensityStatus?.status !== 'READY' && (
+          <div style={{ marginTop: 4, color: '#6B7280' }}>
+            Unavailable. {intensityStatus?.reason ?? 'No trained intensity model is currently available.'}
+          </div>
+        )}
+        <div style={{ marginTop: 7, color: '#6B7280' }}>
+          Official observed intensity remains separate from AI analysis.
+        </div>
+      </section>
     </aside>
   );
 };

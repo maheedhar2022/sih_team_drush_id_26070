@@ -18,6 +18,7 @@ import { useSystemStatus } from './hooks/useSystemStatus';
 import { useSatelliteLayers } from './hooks/useSatelliteLayers';
 import { useSatelliteCatalog } from './hooks/useSatelliteCatalog';
 import { useAiDetectionStatus } from './hooks/useAiDetectionStatus';
+import { useAiIntensityStatus } from './hooks/useAiIntensityStatus';
 import { AiAnalysisPanel } from './components/AiAnalysis/AiAnalysisPanel';
 
 const App: React.FC = () => {
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   } = useSatelliteLayers(detail?.last_observation_utc ?? null);
   const satelliteCatalog = useSatelliteCatalog();
   const aiDetection = useAiDetectionStatus();
+  const aiIntensity = useAiIntensityStatus();
 
   useEffect(() => {
     if (!selectedInitialSystem.current && cyclones.length > 0) {
@@ -110,6 +112,9 @@ const App: React.FC = () => {
             status={aiDetection.status}
             loading={aiDetection.loading}
             error={aiDetection.error}
+            intensityStatus={aiIntensity.status}
+            intensityLoading={aiIntensity.loading}
+            intensityError={aiIntensity.error}
             onClose={() => setAiLabOpen(false)}
           />
         </section>

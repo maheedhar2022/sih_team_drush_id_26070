@@ -20,7 +20,7 @@ from app.providers.base import (
     ProviderStatus,
     RawObservation,
 )
-from app.services.demo_data import _AMPHAN_TRACK_RAW
+from app.services.demo_data import AMPHAN_IBTRACS_SID, _AMPHAN_TRACK_RAW
 
 logger = logging.getLogger("cyclone_ai.providers.historical")
 
@@ -60,7 +60,7 @@ class HistoricalProvider(CycloneDataProvider):
         for raw in _AMPHAN_TRACK_RAW:
             ts = datetime.fromisoformat(raw["ts"].replace("Z", "+00:00"))
             obs = RawObservation(
-                cyclone_id="2020136N10088",
+                cyclone_id=AMPHAN_IBTRACS_SID,
                 cyclone_name="AMPHAN",
                 basin="NI",
                 timestamp_utc=ts,

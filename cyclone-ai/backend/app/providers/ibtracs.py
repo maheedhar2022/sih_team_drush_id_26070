@@ -255,8 +255,12 @@ class IBTracsProvider(CycloneDataProvider):
         for row in reader:
             rows_seen += 1
             # Skip the units row (second row — has values like 'degrees_north')
+            # IBTrACS CSV structure: row 0 = header, row 1 = units, row 2+ = data.
+            # The units row contains descriptive strings in data columns.
             if rows_seen == 1:
-                if row.get("SID", "").strip().startswith("Year"):
+                sid_val = row.get("SID", "").strip()
+                lat_val = row.get("LAT", "").strip()
+                if sid_val.startswith("Year") or "degrees" in lat_val.lower():
                     continue  # this IS the units row
             basin = row.get("BASIN", "").strip()
             if basin != "NI":

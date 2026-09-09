@@ -104,6 +104,10 @@ credentials, freshness, and known limitations.
 See [AI Detection Dataset](docs/AI_DETECTION_DATASET.md) for the required
 manifest, licence/provenance record, event-level split policy, and training run.
 
+See [AI Intensity Dataset](docs/AI_INTENSITY_DATASET.md) for the separate
+intensity-category and wind/pressure dataset contract. A cyclone/no-cyclone
+dataset cannot be used to train the Phase 5 model.
+
 ## Tests
 
 ```bash
@@ -131,3 +135,5 @@ npm run build
 - `POST /api/satellite/observations/{id}/download` (admin token and explicit download enablement required)
 - `GET /api/ai/detection/status`
 - `POST /api/ai/detection?source=<source>&observation_id=<optional-id>`
+- `GET /api/ai/intensity/status`
+- `POST /api/ai/intensity?source=<source>&observation_id=<optional-id>`

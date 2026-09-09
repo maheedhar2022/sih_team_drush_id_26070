@@ -46,6 +46,10 @@ from app.schemas.cyclone import (
     TrackPoint,
 )
 
+# IBTrACS Storm ID for the historical AMPHAN 2020 fallback record.
+# Used across API and providers to identify / exclude the fallback.
+AMPHAN_IBTRACS_SID = "2020136N10088"
+
 # ---------------------------------------------------------------------------
 # Cyclone Amphan (2020) — 6-hourly best-track observations
 #

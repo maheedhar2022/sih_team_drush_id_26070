@@ -50,6 +50,7 @@ from app.services.ingestion import (
     get_latest_cyclone_forecast,
 )
 from app.services.demo_data import (
+    AMPHAN_IBTRACS_SID,
     get_demo_cyclone_detail,
     get_demo_cyclone_track,
     get_demo_cyclones,
@@ -179,7 +180,7 @@ async def list_active_cyclones() -> ActiveCyclonesResponse:
         cyclones = [_obs_to_cyclone(obs) for obs in active_obs]
 
         # Exclude historical fallback if it shows up in active query
-        cyclones = [c for c in cyclones if c.id != "2020136N10088"]
+        cyclones = [c for c in cyclones if c.id != AMPHAN_IBTRACS_SID]
 
         if cyclones:
             freshness_values = [c.data_freshness for c in cyclones]

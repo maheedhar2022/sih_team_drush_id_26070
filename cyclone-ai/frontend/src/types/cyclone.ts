@@ -248,6 +248,31 @@ export interface AiDetectionResult {
   reason: string | null;
 }
 
+export interface AiIntensityStatus {
+  status: 'READY' | 'MODEL_NOT_TRAINED' | 'DEPENDENCY_UNAVAILABLE' | string;
+  dataset_status: 'CONFIGURED' | 'DATASET_UNAVAILABLE' | 'UNKNOWN' | string;
+  model_version: string | null;
+  architecture: string | null;
+  dataset_version: string | null;
+  reason: string | null;
+}
+
+export interface AiIntensityResult {
+  status: 'success' | 'MODEL_NOT_TRAINED' | 'DEPENDENCY_UNAVAILABLE' | string;
+  category: string | null;
+  confidence: number | null;
+  class_probabilities: Record<string, number> | null;
+  wind_speed_kmh: number | null;
+  central_pressure_hpa: number | null;
+  model_version: string | null;
+  architecture: string | null;
+  dataset_version: string | null;
+  inference_timestamp_utc: string | null;
+  observation_id: string | null;
+  source: string | null;
+  reason: string | null;
+}
+
 // ---- UI State --------------------------------------------------------------
 
 export interface SelectedCycloneState {

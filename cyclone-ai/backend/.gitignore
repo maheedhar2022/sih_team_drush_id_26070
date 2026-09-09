@@ -1,3 +1,7 @@
 
 mdapi.zip
 mdapi_tool/
+.env
+*.db
+__pycache__/
+.pytest_cache/
