@@ -1,7 +1,7 @@
 /**
  * CycloneAI — useCyclones hook (Phase 2)
  *
- * Polls /api/cyclones/active every 5 minutes (IBTrACS updates every 6h).
+ * Polls the live API every minute and refreshes immediately when the tab gains focus.
  * New in Phase 2:
  *   - Returns full ActiveCyclonesResponse including data_freshness
  *   - useCycloneDetail also fetches official forecast track
@@ -25,8 +25,7 @@ import type {
   DataSourcesResponse,
 } from '../types/cyclone';
 
-// IBTrACS updates every 6h — polling every 5 min is reasonable
-const POLL_INTERVAL_MS = 5 * 60 * 1_000;
+const LIVE_POLL_INTERVAL_MS = 60 * 1_000;
 
 // ---- Active cyclones list --------------------------------------------------
 
@@ -69,8 +68,15 @@ export function useCyclones(): CyclonesState {
 
   useEffect(() => {
     void doFetch();
-    const id = setInterval(() => void doFetch(), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    const id = setInterval(() => void doFetch(), LIVE_POLL_INTERVAL_MS);
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') void doFetch();
+    };
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, [doFetch]);
 
   return state;
@@ -103,16 +109,24 @@ export function useCycloneDetail(cycloneId: string | null): CycloneDetailState {
 
     let cancelled = false;
 
-    const load = async () => {
-      setState(prev => ({ ...prev, loading: true, error: null }));
+    const load = async (includeForecast: boolean) => {
+      setState(prev => ({ ...prev, loading: prev.detail === null, error: null }));
       try {
-        const [detail, track, forecastTrack] = await Promise.all([
+        const [detail, track] = await Promise.all([
           fetchCycloneDetail(cycloneId),
           fetchCycloneTrack(cycloneId),
-          fetchForecastTrack(cycloneId), // returns null if 404 — not an error
         ]);
+        const forecastTrack = includeForecast
+          ? await fetchForecastTrack(cycloneId)
+          : null;
         if (!cancelled) {
-          setState({ detail, track, forecastTrack, loading: false, error: null });
+          setState(prev => ({
+            detail,
+            track,
+            forecastTrack: includeForecast ? forecastTrack : prev.forecastTrack,
+            loading: false,
+            error: null,
+          }));
         }
       } catch (err) {
         if (!cancelled) {
@@ -127,8 +141,17 @@ export function useCycloneDetail(cycloneId: string | null): CycloneDetailState {
       }
     };
 
-    void load();
-    return () => { cancelled = true; };
+    void load(true);
+    const id = setInterval(() => void load(false), LIVE_POLL_INTERVAL_MS);
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') void load(false);
+    };
+    document.addEventListener('visibilitychange', refreshOnFocus);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
   }, [cycloneId]);
 
   return state;
