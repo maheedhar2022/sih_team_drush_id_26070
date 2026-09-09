@@ -30,6 +30,8 @@ const App: React.FC = () => {
     enabled: satEnabled,
     opacities: satOpacities,
     dateLabel: satDateLabel,
+    loading: satLoading,
+    error: satError,
     toggleLayer: satToggle,
     setOpacity: satSetOpacity,
   } = useSatelliteLayers();
@@ -80,6 +82,8 @@ const App: React.FC = () => {
           satelliteEnabled={satEnabled}
           satelliteOpacities={satOpacities}
           satelliteDateLabel={satDateLabel}
+          satelliteLoading={satLoading}
+          satelliteError={satError}
           onToggleSatelliteLayer={satToggle}
           onSetSatelliteOpacity={satSetOpacity}
         />

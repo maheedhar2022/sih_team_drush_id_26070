@@ -32,7 +32,7 @@ logger = logging.getLogger("cyclone_ai")
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("=" * 60)
-    logger.info("CycloneAI Backend starting — Phase 2")
+    logger.info("CycloneAI Backend starting — Phase 3")
     logger.info("  Version    : %s", settings.app_version)
     logger.info("  Environment: %s", settings.app_env)
     logger.info("  Database   : %s://[configured]", settings.database_url.split("://", 1)[0])
@@ -62,6 +62,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 settings = get_settings()
 
+# Browsers treat localhost and 127.0.0.1 as distinct origins. Supporting both
+# in development prevents a local Vite host choice from breaking API preflight.
+cors_origins = list(settings.cors_origins)
+if settings.app_env == "development":
+    for local_origin in (
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ):
+        if local_origin not in cors_origins:
+            cors_origins.append(local_origin)
+
 app = FastAPI(
     title="CycloneAI API",
     description=(
@@ -78,7 +91,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -92,7 +105,7 @@ async def root() -> dict:
     return {
         "service": "CycloneAI API",
         "version": settings.app_version,
-        "phase": "2 — Data Ingestion",
+        "phase": "3 — Satellite Imagery Integration",
         "docs": "/api/docs",
         "health": "/api/health",
         "sources": "/api/cyclones/sources/list",

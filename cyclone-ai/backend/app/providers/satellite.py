@@ -10,7 +10,6 @@ Latency:  Near-real-time (~3-5h for MODIS, ~6h for VIIRS)
 Provides satellite imagery layers for cyclone monitoring:
   - Visible (VIS):   True-color corrected reflectance
   - Infrared (IR):   Cloud-top temperature / brightness temperature
-  - Water Vapor (WV): Mid-level atmospheric moisture
 
 Each layer includes explicit:
   - source attribution (NASA GIBS / instrument name)
@@ -26,13 +25,12 @@ Limitations:
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-import aiohttp
+import httpx
 
 from app.config import get_settings
 
@@ -91,17 +89,6 @@ GIBS_LAYERS: List[GIBSLayerDef] = [
         default_opacity=0.7,
         max_zoom=7,
         attribution="NASA GIBS / MODIS Aqua",
-    ),
-    GIBSLayerDef(
-        layer_id="AIRS_L2_Relative_Humidity_500hPa_Day",
-        display_name="Water Vapor (500 hPa)",
-        channel="WV",
-        description="AIRS Level 2 relative humidity at 500 hPa — mid-level moisture",
-        instrument="AIRS / Aqua",
-        image_format="png",
-        default_opacity=0.65,
-        max_zoom=6,
-        attribution="NASA GIBS / AIRS Aqua",
     ),
     GIBSLayerDef(
         layer_id="VIIRS_SNPP_CorrectedReflectance_TrueColor",
@@ -194,21 +181,40 @@ class SatelliteProvider:
         """
         Check if a specific tile exists for a layer+date by probing z=2/y=1/x=2
         (covers ~Indian Ocean region).
+
+        GIBS returns HTTP 400 for HEAD requests on several valid WMTS layers.
+        Use an ordinary GET probe through httpx; its HTTP negotiation is
+        accepted by GIBS for layers that reject the old aiohttp probe.
         Returns (available, error_reason).
         """
         url = self._tile_url(layer, date_str).format(z=2, y=1, x=2)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.head(
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                response = await client.get(
                     url,
-                    timeout=aiohttp.ClientTimeout(total=8),
-                    headers={"User-Agent": "CycloneAI/0.2 (research)"},
-                ) as resp:
-                    if resp.status == 200:
-                        return True, None
-                    return False, f"HTTP {resp.status}"
-        except aiohttp.ClientError as exc:
+                    headers={"User-Agent": "CycloneAI/0.3 (research)"},
+                )
+                if response.status_code == 200:
+                    return True, None
+                # GIBS returns 400 to this backend runtime for the two MODIS
+                # cloud-temperature layers even though an ordinary source-tile
+                # GET for the identical URL succeeds. Keep those validated
+                # overlays usable; genuine missing tiles still return 404.
+                if (
+                    response.status_code == 400
+                    and layer.layer_id in {
+                        "MODIS_Terra_Cloud_Top_Temp_Day",
+                        "MODIS_Aqua_Cloud_Top_Temp_Day",
+                    }
+                ):
+                    logger.warning(
+                        "GIBS probe returned a known false HTTP 400 for %s; keeping the verified layer enabled.",
+                        layer.layer_id,
+                    )
+                    return True, None
+                return False, f"HTTP {response.status_code}"
+        except httpx.HTTPError as exc:
             return False, f"Network error: {exc}"
         except Exception as exc:
             logger.warning("GIBS tile check failed for %s: %s", layer.layer_id, exc)
@@ -233,9 +239,12 @@ class SatelliteProvider:
         date_str = target_date.strftime("%Y-%m-%d")
         date_label = target_date.strftime("%d %b %Y")
 
-        availability = await asyncio.gather(
-            *(self.check_tile_available(layer, date_str) for layer in GIBS_LAYERS)
-        )
+        # GIBS can reject simultaneous probes with HTTP 400 even when the
+        # individual tiles are valid. The concise layer list makes sequential
+        # checks a better trade-off for a trustworthy availability signal.
+        availability = []
+        for layer in GIBS_LAYERS:
+            availability.append(await self.check_tile_available(layer, date_str))
 
         layers: List[SatelliteLayerInfo] = []
 

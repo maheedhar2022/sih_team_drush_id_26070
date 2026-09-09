@@ -228,11 +228,13 @@ class MOSDACProvider:
 
         Returns (total_results, list_of_entries).
         """
+        # The official mdapi client accepts at most 100 results per request.
+        # Sending a larger value is one documented source of HTTP 400 responses.
         params = {
             "datasetId": dataset_id,
             "startTime": start_date,
             "endTime": end_date,
-            "count": str(count),
+            "count": str(max(1, min(count, 100))),
         }
 
         try:
@@ -250,7 +252,7 @@ class MOSDACProvider:
                         )
                         return 0, []
 
-                    body = await resp.json()
+                    body = await resp.json(content_type=None)
                     total = body.get("totalResults", 0)
                     entries = []
 

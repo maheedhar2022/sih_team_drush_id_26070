@@ -57,8 +57,9 @@ Official site: <https://rsmcnewdelhi.imd.gov.in>
   the account and selected datasets work.
 - Data: search metadata can be inspected before downloading; downloaded data
   products are not automatically treated as web map tiles.
-- Limitation: this project exposes availability metadata only. It does not
-  fabricate browsable INSAT tiles or expose credentials to the frontend.
+- Limitation: a product is not made browseable until its source format,
+  projection, channel metadata, and derived web asset have been validated.
+  Credentials are never exposed to the frontend.
 
 Official reference: <https://www.mosdac.gov.in/downloadapi-manual>
 

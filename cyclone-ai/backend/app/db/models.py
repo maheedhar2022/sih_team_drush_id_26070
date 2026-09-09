@@ -7,7 +7,8 @@ Tables:
   cyclone_records       — Raw ingested records (immutable audit log)
   cyclone_observations  — Normalised 6-hourly observations (append-only)
   cyclone_forecasts     — Official forecast track points
-  satellite_layers      — Satellite layer metadata (Phase 2b stub)
+  satellite_layers      — Legacy web-map layer metadata
+  satellite_observations — INSAT/MOSDAC acquisition and processing catalog
 
 Design rules:
   - cyclone_observations are NEVER overwritten — append-only
@@ -258,3 +259,55 @@ class SatelliteLayer(Base):
     tile_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     opacity: Mapped[float] = mapped_column(Float, default=1.0)
     available: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+# ---------------------------------------------------------------------------
+# satellite_observations  (Phase 3: source products, not image blobs)
+# ---------------------------------------------------------------------------
+class SatelliteObservation(Base):
+    """Catalog entry for a retrieved or discovered satellite source product.
+
+    Source assets remain on disk/object storage. The database keeps provenance,
+    processing state, and safe relative paths only; it never stores product bytes.
+    """
+    __tablename__ = "satellite_observations"
+    __table_args__ = (
+        UniqueConstraint("source", "source_record_id", name="uq_sat_source_record"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Source identity and product definition
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_record_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    satellite: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    sensor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    product_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    channel: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    processing_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # Time and spatial metadata supplied by the source product
+    observation_timestamp_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    received_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    processed_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    bbox_north: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_south: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_east: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bbox_west: Mapped[float | None] = mapped_column(Float, nullable=True)
+    projection: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    spatial_resolution_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    file_format: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # Provenance and storage. Paths are relative to SATELLITE_STORAGE_DIR.
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processed_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    web_asset_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # DISCOVERED | DOWNLOADING | DOWNLOADED | PROCESSING | PROCESSED | FAILED | UNAVAILABLE
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="DISCOVERED", index=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)

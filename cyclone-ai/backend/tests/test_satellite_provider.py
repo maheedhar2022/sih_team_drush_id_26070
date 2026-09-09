@@ -35,11 +35,10 @@ class TestGIBSLayerDefinitions:
             assert layer.max_zoom > 0
             assert layer.attribution, "attribution must be non-empty"
 
-    def test_at_least_one_layer_per_channel(self):
+    def test_at_least_one_visible_and_infrared_layer(self):
         channels = {l.channel for l in GIBS_LAYERS}
         assert "VIS" in channels, "Must have at least one VIS layer"
         assert "IR" in channels, "Must have at least one IR layer"
-        assert "WV" in channels, "Must have at least one WV layer"
 
     def test_unique_layer_ids(self):
         ids = [l.layer_id for l in GIBS_LAYERS]
@@ -126,12 +125,12 @@ class TestSatelliteProvider:
         provider = self._make_provider()
         layer = GIBS_LAYERS[0]
 
-        import aiohttp
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_session.return_value.__aenter__ = AsyncMock(
-                side_effect=aiohttp.ClientError("timeout")
-            )
-            mock_session.return_value.__aexit__ = AsyncMock()
+        import httpx
+        with patch("httpx.AsyncClient") as mock_client:
+            session = MagicMock()
+            session.get = AsyncMock(side_effect=httpx.HTTPError("timeout"))
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=session)
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
             available, reason = await provider.check_tile_available(layer, "2024-05-20")
 

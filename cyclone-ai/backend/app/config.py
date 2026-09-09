@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # ── General ──────────────────────────────────────────────────────────────
     app_env: str = "development"
-    app_version: str = "0.2.0-phase2"
+    app_version: str = "0.3.0-phase3"
     demo_mode: bool = True   # Falls back to historical if no live data found
 
     # CORS — accepts a comma-separated string or a JSON list
@@ -71,10 +71,14 @@ class Settings(BaseSettings):
     # An observation is DELAYED if within this many hours (else STALE)
     data_delayed_threshold_hours: int = 24
 
-    # ── Satellite Imagery (Phase 2b) ────────────────────────────────────────
+    # ── Satellite Imagery (Phase 3) ─────────────────────────────────────────
     satellite_enabled: bool = True
     gibs_wmts_url: str = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
     gibs_tile_cache_seconds: int = 3600   # 1h browser cache for proxied tiles
+    # Persistent storage for downloaded source products. Keep raw products out
+    # of the database; a Render disk or object storage mount is required in production.
+    satellite_storage_dir: str = "data/satellite"
+    satellite_max_download_mb: int = 2048
 
     # ── AI ────────────────────────────────────────────────────────────────────
     ai_model_dir: str = "../models"

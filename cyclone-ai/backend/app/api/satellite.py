@@ -16,11 +16,20 @@ from typing import List, Optional
 
 import aiohttp
 from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.config import get_settings
 from app.providers.satellite import get_satellite_provider
 from app.providers.mosdac import get_mosdac_provider
+from app.services.satellite_catalog import (
+    SatelliteStorage,
+    available_channels,
+    catalog_summary,
+    get_observation,
+    list_observations,
+    observation_payload,
+)
 
 logger = logging.getLogger("cyclone_ai.api.satellite")
 router = APIRouter(prefix="/api/satellite", tags=["satellite"])
@@ -52,6 +61,45 @@ class SatelliteLayersListResponse(BaseModel):
     layers: List[SatelliteLayerResponse]
     retrieved_at_utc: str
     gibs_base_url: str
+    note: str
+
+
+class SatelliteObservationResponse(BaseModel):
+    id: int
+    source: str
+    source_record_id: str
+    satellite: str
+    sensor: Optional[str] = None
+    product_id: str
+    product_name: Optional[str] = None
+    channel: Optional[str] = None
+    processing_level: Optional[str] = None
+    observation_timestamp_utc: Optional[datetime] = None
+    received_at_utc: datetime
+    processed_at_utc: Optional[datetime] = None
+    bbox: Optional[dict[str, float]] = None
+    projection: Optional[str] = None
+    spatial_resolution_m: Optional[float] = None
+    file_format: Optional[str] = None
+    source_url: Optional[str] = None
+    checksum_sha256: Optional[str] = None
+    status: str
+    failure_reason: Optional[str] = None
+    web_image_available: bool
+
+
+class SatelliteObservationListResponse(BaseModel):
+    observations: List[SatelliteObservationResponse]
+    count: int
+
+
+class SatelliteCatalogStatusResponse(BaseModel):
+    satellite_enabled: bool
+    mosdac_enabled: bool
+    mosdac_configured: bool
+    storage_root_configured: bool
+    latest_observation_utc: Optional[datetime] = None
+    catalog_state: str
     note: str
 
 
@@ -184,6 +232,81 @@ async def list_latest_satellite_layers() -> SatelliteLayersListResponse:
 
 
 @router.get(
+    "/status",
+    response_model=SatelliteCatalogStatusResponse,
+    summary="Get INSAT/MOSDAC ingestion catalog status",
+)
+async def satellite_catalog_status() -> SatelliteCatalogStatusResponse:
+    """Report catalog readiness without exposing credentials or source files."""
+    return SatelliteCatalogStatusResponse(**await catalog_summary())
+
+
+@router.get(
+    "/observations",
+    response_model=SatelliteObservationListResponse,
+    summary="List validated satellite source-product catalog entries",
+)
+async def list_satellite_observations(
+    limit: int = Query(50, ge=1, le=200),
+    source: Optional[str] = Query(None, max_length=64),
+) -> SatelliteObservationListResponse:
+    """List discovered/downloaded/processed products with their true state."""
+    observations = await list_observations(limit=limit, source=source)
+    return SatelliteObservationListResponse(
+        observations=[SatelliteObservationResponse(**observation_payload(item)) for item in observations],
+        count=len(observations),
+    )
+
+
+@router.get(
+    "/channels",
+    summary="List channels represented by cataloged satellite observations",
+)
+async def list_satellite_channels() -> dict:
+    return {"channels": await available_channels()}
+
+
+@router.get(
+    "/observations/{observation_id}/image",
+    summary="Return a processed satellite image when one has been validated",
+    responses={404: {"description": "No processed image is available"}},
+)
+async def get_satellite_observation_image(observation_id: int) -> FileResponse:
+    observation = await get_observation(observation_id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail="Satellite observation not found.")
+    if observation.status != "PROCESSED" or not observation.web_asset_path:
+        raise HTTPException(
+            status_code=404,
+            detail="No validated web image is available for this source product.",
+        )
+
+    try:
+        asset_path = SatelliteStorage.from_settings().resolve_existing(observation.web_asset_path)
+    except ValueError:
+        logger.error("Rejected unsafe satellite asset path for observation %s", observation_id)
+        raise HTTPException(status_code=500, detail="Stored satellite asset path is invalid.")
+
+    if not asset_path.is_file():
+        raise HTTPException(status_code=404, detail="Processed satellite image file is unavailable.")
+
+    media_type = "image/png" if asset_path.suffix.lower() == ".png" else "image/jpeg"
+    return FileResponse(asset_path, media_type=media_type, filename=asset_path.name)
+
+
+@router.get(
+    "/observations/{observation_id}",
+    response_model=SatelliteObservationResponse,
+    summary="Get source and processing metadata for one satellite observation",
+)
+async def get_satellite_observation(observation_id: int) -> SatelliteObservationResponse:
+    observation = await get_observation(observation_id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail="Satellite observation not found.")
+    return SatelliteObservationResponse(**observation_payload(observation))
+
+
+@router.get(
     "/tile/{layer_id}/{z}/{y}/{x}",
     summary="Proxy a satellite tile from NASA GIBS",
     responses={
@@ -238,7 +361,7 @@ async def proxy_satellite_tile(
 
     # Build the upstream GIBS URL
     gibs_url = (
-        f"{settings.gibs_wmts_url}/1.0.0/{layer_id}/default/"
+        f"{settings.gibs_wmts_url}/{layer_id}/default/"
         f"{date_str}/GoogleMapsCompatible_Level{layer_def.max_zoom}/"
         f"{z}/{y}/{x}.{layer_def.image_format}"
     )

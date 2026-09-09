@@ -112,6 +112,8 @@ interface Props {
   satelliteEnabled?: Record<string, boolean>;
   satelliteOpacities?: Record<string, number>;
   satelliteDateLabel?: string | null;
+  satelliteLoading?: boolean;
+  satelliteError?: string | null;
   onToggleSatelliteLayer?: (id: string) => void;
   onSetSatelliteOpacity?: (id: string, value: number) => void;
 }
@@ -120,7 +122,7 @@ export const CycloneMap: React.FC<Props> = ({
   cyclones, selectedId, track, forecastTrack,
   dataFreshness, dataSource, onSelectCyclone,
   satelliteLayers = [], satelliteEnabled = {},
-  satelliteOpacities = {}, satelliteDateLabel,
+  satelliteOpacities = {}, satelliteDateLabel, satelliteLoading = false, satelliteError = null,
   onToggleSatelliteLayer, onSetSatelliteOpacity,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -397,6 +399,8 @@ export const CycloneMap: React.FC<Props> = ({
           satelliteEnabled={satelliteEnabled}
           satelliteOpacities={satelliteOpacities}
           satelliteDateLabel={satelliteDateLabel}
+          satelliteLoading={satelliteLoading}
+          satelliteError={satelliteError}
           onToggle={onToggleSatelliteLayer}
           onOpacity={onSetSatelliteOpacity}
         />
@@ -503,12 +507,14 @@ function LegendRow({ swatch, label, sublabel, unavailable }: {
 
 // ---- Layer Control Panel --------------------------------------------------
 function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpacities,
-  satelliteDateLabel, onToggle, onOpacity }: {
+  satelliteDateLabel, satelliteLoading, satelliteError, onToggle, onOpacity }: {
   onClose: () => void;
   satelliteLayers: SatelliteLayerSpec[];
   satelliteEnabled: Record<string, boolean>;
   satelliteOpacities: Record<string, number>;
   satelliteDateLabel?: string | null;
+  satelliteLoading: boolean;
+  satelliteError: string | null;
   onToggle?: (id: string) => void;
   onOpacity?: (id: string, value: number) => void;
 }) {
@@ -561,9 +567,21 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         )}
       </div>
 
-      {satelliteLayers.length === 0 && (
+      {satelliteLoading && (
         <div style={{ fontSize: 11, color: '#9CA3AF', padding: '8px 0' }}>
           Loading satellite layers...
+        </div>
+      )}
+
+      {!satelliteLoading && satelliteError && (
+        <div style={{ fontSize: 11, color: '#B91C1C', padding: '8px 0', lineHeight: 1.45 }}>
+          Satellite layer service is unavailable.
+        </div>
+      )}
+
+      {!satelliteLoading && !satelliteError && satelliteLayers.length === 0 && (
+        <div style={{ fontSize: 11, color: '#6B7280', padding: '8px 0', lineHeight: 1.45 }}>
+          No source imagery is available for the selected date.
         </div>
       )}
 
@@ -607,8 +625,7 @@ function LayerPanel({ onClose, satelliteLayers, satelliteEnabled, satelliteOpaci
         background: '#F9FAFB', borderRadius: 6,
         fontSize: 10, color: '#9CA3AF', lineHeight: 1.5,
       }}>
-        <strong>Sources:</strong> NASA GIBS (tiles, NRT ~3-5h) + MOSDAC/ISRO (INSAT-3DR metadata).
-        No fabricated imagery.
+        <strong>Sources:</strong> NASA GIBS raster tiles. INSAT/MOSDAC products appear only after source-product validation.
       </div>
     </div>
   );

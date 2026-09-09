@@ -40,7 +40,8 @@ backend configuration.
 ## Deployment
 
 The repository root contains the Vercel configuration for `frontend/` and a
-Render Blueprint for `backend/`.
+Render Blueprint for `backend/`. See [Satellite Data Pipeline](docs/SATELLITE_DATA.md)
+before enabling MOSDAC downloads in a deployed environment.
 
 Render service settings:
 
@@ -94,3 +95,5 @@ npm run build
 - `GET /api/data-sources`
 - `GET /api/satellite/latest`
 - `GET /api/satellite/layers`
+- `GET /api/satellite/status`
+- `GET /api/satellite/observations`
