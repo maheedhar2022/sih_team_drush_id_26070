@@ -90,10 +90,12 @@ export function createAnimatedCycloneMarker(opts: AnimatedMarkerOptions): HTMLDi
   const root = document.createElement('div');
   root.className = 'cyclone-marker-root';
   root.style.cssText = `
-    position: relative;
-    display: flex;
+    position: absolute;
+    display: inline-flex;
     flex-direction: column;
     align-items: center;
+    width: max-content;
+    height: max-content;
     cursor: pointer;
     z-index: ${opts.selected ? 100 : 10};
   `;

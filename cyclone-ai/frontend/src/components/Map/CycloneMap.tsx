@@ -183,7 +183,7 @@ export const CycloneMap: React.FC<Props> = ({
   const drawTrack = useCallback(() => {
     const m = mapRef.current;
     if (!m || !loaded) return;
-    ['cyclone-track-line', 'cyclone-track-dots', 'cyclone-track-peak'].forEach(id => {
+    ['cyclone-track-casing', 'cyclone-track-line', 'cyclone-track-dots', 'cyclone-track-peak'].forEach(id => {
       if (m.getLayer(id)) m.removeLayer(id);
     });
     ['cyclone-track', 'cyclone-track-pts', 'cyclone-track-peak-pt'].forEach(id => {
@@ -200,9 +200,14 @@ export const CycloneMap: React.FC<Props> = ({
       data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} },
     });
     m.addLayer({
+      id: 'cyclone-track-casing', type: 'line', source: 'cyclone-track',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#FFFFFF', 'line-width': 6, 'line-opacity': 0.9 },
+    });
+    m.addLayer({
       id: 'cyclone-track-line', type: 'line', source: 'cyclone-track',
       layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#111827', 'line-width': 2.5, 'line-opacity': 0.85 },
+      paint: { 'line-color': '#111827', 'line-width': 3, 'line-opacity': 1 },
     });
 
     // Track dots (all points)
