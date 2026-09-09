@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: cyclone-ai-api
+    runtime: python
+    rootDir: cyclone-ai/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
