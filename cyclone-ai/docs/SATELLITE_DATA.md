@@ -49,10 +49,16 @@ or object storage before enabling a download worker in production.
 6. The FastAPI image endpoint serves only a `PROCESSED` asset that resolves
    within the configured storage root. Otherwise it returns an explicit 404.
 
-No worker automatically downloads MOSDAC products yet. That is intentional:
-the first real product sample must establish the HDF fields, calibration,
-projection, and georeferencing rules before an INSAT image can be rendered or
-offered as a map overlay.
+`POST /api/satellite/mosdac/discover` now calls the official public catalog and
+persists exact source granules. It requires `MOSDAC_ENABLED=true` and the
+`X-Satellite-Admin-Token` header. `POST /api/satellite/observations/{id}/download`
+uses the official authenticated download API only when
+`MOSDAC_DOWNLOAD_ENABLED=true`; it ends at `DOWNLOADED` until a representative
+HDF sample establishes calibration, projection, and georeferencing rules.
+
+When `MOSDAC_ENABLED=true`, the backend scheduler repeats the public discovery
+operation every `MOSDAC_DISCOVERY_REFRESH_MINUTES` (default: 60). It catalogs a
+maximum of five current source granules per run and never downloads product bytes.
 
 ## API
 
@@ -62,6 +68,10 @@ offered as a map overlay.
 - `GET /api/satellite/observations/{id}` returns the detailed provenance record.
 - `GET /api/satellite/observations/{id}/image` serves a validated derived asset
   only when its state is `PROCESSED`.
+- `POST /api/satellite/mosdac/discover` discovers and catalogs exact INSAT
+  source products. It never downloads product bytes.
+- `POST /api/satellite/observations/{id}/download` performs one guarded,
+  authenticated source-product download.
 
 `GET /api/satellite/layers` remains the NASA GIBS layer endpoint. It does not
 claim that a GIBS overlay is INSAT imagery.

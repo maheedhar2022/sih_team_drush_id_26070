@@ -55,11 +55,13 @@ Official site: <https://rsmcnewdelhi.imd.gov.in>
   downloads. Configure `MOSDAC_USERNAME` and `MOSDAC_PASSWORD` only in the
   backend environment, then set `MOSDAC_ENABLED=true` only after confirming
   the account and selected datasets work.
-- Data: search metadata can be inspected before downloading; downloaded data
-  products are not automatically treated as web map tiles.
-- Limitation: a product is not made browseable until its source format,
-  projection, channel metadata, and derived web asset have been validated.
-  Credentials are never exposed to the frontend.
+- Data: `POST /api/satellite/mosdac/discover` uses the official public catalog
+  to persist exact source granule IDs, filenames, source observation times, and
+  coverage. A separate protected endpoint performs an authenticated download
+  only when explicitly enabled.
+- Limitation: a downloaded product is not made browseable until its source
+  format, projection, channel metadata, and derived web asset have been
+  validated. Credentials and the admin token are never exposed to the frontend.
 
 Official reference: <https://www.mosdac.gov.in/downloadapi-manual>
 

@@ -280,6 +280,7 @@ class SatelliteObservation(Base):
     # Source identity and product definition
     source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     source_record_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
     satellite: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     sensor: Mapped[str | None] = mapped_column(String(64), nullable=True)
     product_id: Mapped[str] = mapped_column(String(64), nullable=False)

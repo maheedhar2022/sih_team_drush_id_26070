@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -49,12 +50,26 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Create all tables if they don't exist (schema-first for dev)."""
+    """Create tables and apply narrowly scoped additive schema upgrades."""
     # Import models so they register with Base metadata
     import app.db.models  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_apply_additive_schema_upgrades)
     logger.info("Database tables initialised.")
+
+
+def _apply_additive_schema_upgrades(connection) -> None:
+    """Keep schema-first deployments compatible with the Phase 3 catalog."""
+    inspector = inspect(connection)
+    if "satellite_observations" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("satellite_observations")}
+    if "source_filename" not in columns:
+        connection.execute(
+            text("ALTER TABLE satellite_observations ADD COLUMN source_filename VARCHAR(512)")
+        )
+        logger.info("Applied additive satellite_observations.source_filename upgrade.")
 
 
 async def get_db():

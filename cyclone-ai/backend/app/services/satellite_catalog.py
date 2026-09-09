@@ -68,6 +68,7 @@ def observation_payload(observation: SatelliteObservation) -> dict:
         "id": observation.id,
         "source": observation.source,
         "source_record_id": observation.source_record_id,
+        "source_filename": observation.source_filename,
         "satellite": observation.satellite,
         "sensor": observation.sensor,
         "product_id": observation.product_id,

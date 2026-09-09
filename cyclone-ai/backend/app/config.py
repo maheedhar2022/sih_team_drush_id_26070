@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     mosdac_password: str = ""
     mosdac_api_url: str = "https://www.mosdac.gov.in"
     mosdac_enabled: bool = False
+    # Discovery is public; downloads remain separately disabled until a
+    # persistent storage location and an administrator token are configured.
+    mosdac_download_enabled: bool = False
+    satellite_admin_token: str = ""
+    mosdac_request_timeout_seconds: int = 60
+    mosdac_discovery_refresh_minutes: int = 60
     # Keep legacy key name for backward compat
     mosdac_api_key: str = ""
 

@@ -23,6 +23,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import get_settings
 from app.db.session import init_db
 from app.services.ingestion import get_last_ingestion_time, ingest_all
+from app.services.mosdac_ingestion import MOSDACIntegrationError, discover_mosdac_products
 
 logger = logging.getLogger("cyclone_ai.scheduler")
 
@@ -40,6 +41,23 @@ async def _run_ingest() -> None:
             logger.info("[Scheduler] No new observations — data already current or no active NI storms.")
     except Exception as exc:
         logger.exception("[Scheduler] Ingestion run failed: %s", exc)
+
+
+async def _run_mosdac_discovery() -> None:
+    """Catalog a bounded set of current MOSDAC source products, never download them."""
+    try:
+        summary = await discover_mosdac_products(limit=5)
+        logger.info(
+            "[Scheduler] MOSDAC discovery: dataset=%s discovered=%d inserted=%d updated=%d",
+            summary.dataset_id or "none",
+            summary.discovered_count,
+            summary.inserted_count,
+            summary.updated_count,
+        )
+    except MOSDACIntegrationError as exc:
+        logger.warning("[Scheduler] MOSDAC discovery unavailable: %s", exc)
+    except Exception as exc:
+        logger.exception("[Scheduler] MOSDAC discovery failed: %s", exc)
 
 
 async def startup_ingest() -> None:
@@ -118,6 +136,20 @@ def start_scheduler() -> None:
         logger.info(
             "[Scheduler] Scheduled RSMC bulletin scrape every %dh",
             settings.rsmc_bulletin_refresh_hours,
+        )
+
+    if settings.mosdac_enabled:
+        scheduler.add_job(
+            _run_mosdac_discovery,
+            trigger=IntervalTrigger(minutes=settings.mosdac_discovery_refresh_minutes),
+            id="mosdac_source_discovery",
+            name="MOSDAC INSAT source discovery",
+            replace_existing=True,
+            misfire_grace_time=600,
+        )
+        logger.info(
+            "[Scheduler] Scheduled MOSDAC source discovery every %d minutes (metadata only).",
+            settings.mosdac_discovery_refresh_minutes,
         )
 
     scheduler.start()

@@ -61,6 +61,16 @@ DATABASE_URL=postgresql+asyncpg://...
 CORS_ORIGINS=["https://your-vercel-project.vercel.app"]
 ```
 
+Optional MOSDAC source-product discovery requires these backend-only variables:
+
+```text
+MOSDAC_ENABLED=true
+SATELLITE_ADMIN_TOKEN=<long-random-secret>
+```
+
+Leave `MOSDAC_DOWNLOAD_ENABLED=false` until the service has persistent storage
+and the team has validated a real HDF sample.
+
 Set `VITE_API_URL=https://your-render-service.onrender.com` in Vercel as a
 Config variable, then redeploy the frontend.
 
@@ -97,3 +107,5 @@ npm run build
 - `GET /api/satellite/layers`
 - `GET /api/satellite/status`
 - `GET /api/satellite/observations`
+- `POST /api/satellite/mosdac/discover` (admin token required)
+- `POST /api/satellite/observations/{id}/download` (admin token and explicit download enablement required)

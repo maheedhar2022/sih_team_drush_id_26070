@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import logging
 import os
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -101,6 +102,12 @@ class MOSDACSearchResult:
     identifier: str         # Filename
     updated: str            # ISO timestamp
     dataset_id: str
+    observation_start_utc: Optional[datetime] = None
+    observation_end_utc: Optional[datetime] = None
+    bbox_north: Optional[float] = None
+    bbox_south: Optional[float] = None
+    bbox_east: Optional[float] = None
+    bbox_west: Optional[float] = None
 
 
 @dataclass
@@ -109,6 +116,14 @@ class MOSDACAuthToken:
     access_token: str
     refresh_token: str
     username: str
+
+
+@dataclass
+class MOSDACDownloadResult:
+    """A completed source-product download and its integrity metadata."""
+    path: Path
+    checksum_sha256: str
+    byte_count: int
 
 
 @dataclass
@@ -168,6 +183,22 @@ class MOSDACProvider:
         """Check if MOSDAC credentials are set."""
         return bool(self._settings.mosdac_username and self._settings.mosdac_password)
 
+    @staticmethod
+    def _parse_source_datetime(value: object) -> Optional[datetime]:
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            return None
+
+    @classmethod
+    def _parse_dc_date(cls, value: object) -> tuple[Optional[datetime], Optional[datetime]]:
+        if not isinstance(value, str) or not value:
+            return None, None
+        start, _, end = value.partition("/")
+        return cls._parse_source_datetime(start), cls._parse_source_datetime(end)
+
     async def authenticate(self) -> Optional[MOSDACAuthToken]:
         """
         Authenticate with MOSDAC and get Bearer tokens.
@@ -187,7 +218,7 @@ class MOSDACProvider:
                 async with session.post(
                     MOSDAC_TOKEN_URL,
                     json=data,
-                    timeout=aiohttp.ClientTimeout(total=30),
+                    timeout=aiohttp.ClientTimeout(total=self._settings.mosdac_request_timeout_seconds),
                 ) as resp:
                     if resp.status == 401:
                         body = await resp.json()
@@ -199,7 +230,7 @@ class MOSDACProvider:
                         logger.error("MOSDAC auth failed: HTTP %d", resp.status)
                         return None
 
-                    body = await resp.json()
+                    body = await resp.json(content_type=None)
                     self._token = MOSDACAuthToken(
                         access_token=body["access_token"],
                         refresh_token=body["refresh_token"],
@@ -242,8 +273,8 @@ class MOSDACProvider:
                 async with session.get(
                     MOSDAC_SEARCH_URL,
                     params=params,
-                    timeout=aiohttp.ClientTimeout(total=60),  # MOSDAC is slow
-                    headers={"User-Agent": "CycloneAI/0.2 (research)"},
+                    timeout=aiohttp.ClientTimeout(total=self._settings.mosdac_request_timeout_seconds),
+                    headers={"User-Agent": "CycloneAI/0.3 (research)"},
                 ) as resp:
                     if resp.status != 200:
                         logger.warning(
@@ -257,11 +288,19 @@ class MOSDACProvider:
                     entries = []
 
                     for item in body.get("entries", []):
+                        observed_at, observation_end = self._parse_dc_date(item.get("dcDate"))
+                        bbox = (item.get("boundbox") or [{}])[0]
                         entries.append(MOSDACSearchResult(
                             record_id=item.get("id", ""),
                             identifier=item.get("identifier", ""),
                             updated=item.get("updated", ""),
                             dataset_id=dataset_id,
+                            observation_start_utc=observed_at,
+                            observation_end_utc=observation_end,
+                            bbox_north=self._parse_float(bbox.get("north")),
+                            bbox_south=self._parse_float(bbox.get("south")),
+                            bbox_east=self._parse_float(bbox.get("east")),
+                            bbox_west=self._parse_float(bbox.get("west")),
                         ))
 
                     logger.info(
@@ -277,6 +316,87 @@ class MOSDACProvider:
             logger.exception("MOSDAC search error: %s", exc)
             return 0, []
 
+    @staticmethod
+    def _parse_float(value: object) -> Optional[float]:
+        try:
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    async def discover_products(
+        self, target_date: Optional[datetime] = None, count: int = 5,
+    ) -> tuple[str, List[MOSDACSearchResult]]:
+        """Discover exact source granules, preferring INSAT-3DS over INSAT-3DR."""
+        # MOSDAC publishes new INSAT granules through the current UTC day.  The
+        # scheduler should therefore discover the live catalog window by default.
+        target_date = target_date or datetime.now(timezone.utc)
+        start_date = target_date.strftime("%Y-%m-%d")
+        end_date = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        for dataset_id in MOSDAC_DATASETS:
+            _, entries = await self.search_dataset(dataset_id, start_date, end_date, count=count)
+            valid_entries = [entry for entry in entries if entry.record_id and entry.identifier]
+            if valid_entries:
+                return dataset_id, valid_entries
+        return "", []
+
+    async def logout(self) -> None:
+        """End an authenticated MOSDAC session without logging token material."""
+        if self._token is None:
+            return
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    MOSDAC_LOGOUT_URL,
+                    headers={"Authorization": f"Bearer {self._token.access_token}"},
+                    timeout=aiohttp.ClientTimeout(total=self._settings.mosdac_request_timeout_seconds),
+                )
+        except aiohttp.ClientError as exc:
+            logger.warning("MOSDAC logout failed: %s", exc)
+        finally:
+            self._token = None
+
+    async def download_record(self, record_id: str, destination: Path) -> MOSDACDownloadResult:
+        """Download one authenticated source granule to a caller-controlled path."""
+        token = await self.authenticate()
+        if token is None:
+            raise RuntimeError("MOSDAC authentication failed; source product was not downloaded.")
+
+        temporary_path = destination.with_suffix(destination.suffix + ".part")
+        maximum_bytes = self._settings.satellite_max_download_mb * 1024 * 1024
+        checksum = hashlib.sha256()
+        byte_count = 0
+
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    MOSDAC_DOWNLOAD_URL,
+                    params={"id": record_id},
+                    headers={"Authorization": f"Bearer {token.access_token}"},
+                    timeout=aiohttp.ClientTimeout(total=self._settings.mosdac_request_timeout_seconds),
+                ) as response:
+                    if response.status != 200:
+                        raise RuntimeError(f"MOSDAC download returned HTTP {response.status}.")
+                    declared_size = response.content_length
+                    if declared_size is not None and declared_size > maximum_bytes:
+                        raise RuntimeError("MOSDAC source product exceeds SATELLITE_MAX_DOWNLOAD_MB.")
+                    with temporary_path.open("wb") as output:
+                        async for chunk in response.content.iter_chunked(1024 * 1024):
+                            byte_count += len(chunk)
+                            if byte_count > maximum_bytes:
+                                raise RuntimeError("MOSDAC source product exceeds SATELLITE_MAX_DOWNLOAD_MB.")
+                            checksum.update(chunk)
+                            output.write(chunk)
+            os.replace(temporary_path, destination)
+            return MOSDACDownloadResult(destination, checksum.hexdigest(), byte_count)
+        except aiohttp.ClientError as exc:
+            raise RuntimeError(f"MOSDAC download network error: {exc}") from exc
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
+            await self.logout()
+
     async def get_layers(
         self, target_date: Optional[datetime] = None
     ) -> MOSDACLayersResult:
@@ -287,81 +407,21 @@ class MOSDACProvider:
         This is used to populate the frontend satellite layer panel alongside
         NASA GIBS layers.
         """
-        if not self.is_configured:
-            return MOSDACLayersResult(
-                retrieved_at_utc=datetime.now(timezone.utc).isoformat(),
-                authenticated=False,
-                note="MOSDAC credentials not configured. Set MOSDAC_USERNAME and MOSDAC_PASSWORD in .env",
-            )
-
         now = datetime.now(timezone.utc)
-        if target_date is None:
-            target_date = now - timedelta(days=1)
+        dataset_id, entries = await self.discover_products(target_date=target_date, count=2)
+        product_label = MOSDAC_DATASETS[dataset_id]["satellite"] if dataset_id else "INSAT"
+        logger.info("MOSDAC provider: %d source granules discovered for %s", len(entries), product_label)
 
-        date_str = target_date.strftime("%Y-%m-%d")
-        end_str = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        date_label = target_date.strftime("%d %b %Y")
-
-        layers: List[MOSDACLayerInfo] = []
-
-        # Try INSAT-3DS first (current operational), then INSAT-3DR
-        for dataset_id, ds_info in MOSDAC_DATASETS.items():
-            try:
-                total, entries = await self.search_dataset(
-                    dataset_id=dataset_id,
-                    start_date=date_str,
-                    end_date=end_str,
-                    count=2,
-                )
-            except Exception:
-                total, entries = 0, []
-
-            for channel_key, ch_info in INSAT_CHANNELS.items():
-                layer_id = f"mosdac_{dataset_id}_{channel_key}"
-
-                layers.append(MOSDACLayerInfo(
-                    layer_id=layer_id,
-                    display_name=f"{ch_info['display_name']} — {ds_info['satellite']}",
-                    channel=channel_key if channel_key in ("VIS", "WV") else "IR",
-                    description=f"{ch_info['description']} ({ch_info['wavelength']})",
-                    satellite=ds_info["satellite"],
-                    dataset_id=dataset_id,
-                    timestamp_utc=f"{date_str}T00:00:00Z",
-                    date_label=date_label,
-                    source=f"MOSDAC/ISRO — {ds_info['satellite']}",
-                    source_url="https://mosdac.gov.in",
-                    available=total > 0,
-                    file_count=total,
-                    unavailable_reason=None if total > 0 else "No data files found for this date",
-                ))
-
-            # If INSAT-3DS has data, skip 3DR (avoid duplicates)
-            if total > 0:
-                break
-
-        # Try to authenticate (to verify credentials work)
-        auth_ok = False
-        try:
-            token = await self.authenticate()
-            auth_ok = token is not None
-        except Exception:
-            auth_ok = False
-
-        available_count = sum(1 for l in layers if l.available)
-        logger.info(
-            "MOSDAC provider: %d layers, %d available for %s, auth=%s",
-            len(layers), available_count, date_str, auth_ok,
-        )
-
+        # A discovered HDF product is not a web overlay. The catalog/download
+        # pipeline records it separately; only a format-validated processed
+        # asset can be exposed to MapLibre later.
         return MOSDACLayersResult(
-            layers=layers,
+            layers=[],
             retrieved_at_utc=now.isoformat(),
-            authenticated=auth_ok,
+            authenticated=False,
             note=(
-                f"MOSDAC/ISRO satellite data for {date_label}. "
-                f"{'Authenticated' if auth_ok else 'Auth failed or pending'}. "
-                f"{available_count} channel(s) available. "
-                "Source: ISRO MOSDAC — Indian geostationary satellites."
+                f"MOSDAC/ISRO discovered {len(entries)} {product_label} source granule(s). "
+                "No INSAT map layer is exposed until source-product validation and processing complete."
             ),
         )
 

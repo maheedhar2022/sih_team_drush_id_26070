@@ -11,11 +11,12 @@ No tiles are fabricated — unavailable layers return clear status.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 
 import aiohttp
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -29,6 +30,11 @@ from app.services.satellite_catalog import (
     get_observation,
     list_observations,
     observation_payload,
+)
+from app.services.mosdac_ingestion import (
+    MOSDACIntegrationError,
+    discover_mosdac_products,
+    download_mosdac_observation,
 )
 
 logger = logging.getLogger("cyclone_ai.api.satellite")
@@ -68,6 +74,7 @@ class SatelliteObservationResponse(BaseModel):
     id: int
     source: str
     source_record_id: str
+    source_filename: Optional[str] = None
     satellite: str
     sensor: Optional[str] = None
     product_id: str
@@ -101,6 +108,28 @@ class SatelliteCatalogStatusResponse(BaseModel):
     latest_observation_utc: Optional[datetime] = None
     catalog_state: str
     note: str
+
+
+class MOSDACDiscoveryResponse(BaseModel):
+    dataset_id: Optional[str] = None
+    discovered_count: int
+    inserted_count: int
+    updated_count: int
+    note: str
+
+
+def _require_satellite_admin_token(x_satellite_admin_token: Optional[str]) -> None:
+    """Protect actions that write to the source-product catalog or disk."""
+    configured_token = get_settings().satellite_admin_token
+    if not configured_token:
+        raise HTTPException(
+            status_code=503,
+            detail="Satellite admin actions are disabled until SATELLITE_ADMIN_TOKEN is configured.",
+        )
+    if not x_satellite_admin_token or not secrets.compare_digest(
+        x_satellite_admin_token, configured_token,
+    ):
+        raise HTTPException(status_code=403, detail="Invalid satellite admin token.")
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +270,39 @@ async def satellite_catalog_status() -> SatelliteCatalogStatusResponse:
     return SatelliteCatalogStatusResponse(**await catalog_summary())
 
 
+@router.post(
+    "/mosdac/discover",
+    response_model=MOSDACDiscoveryResponse,
+    summary="Discover official INSAT source products from the MOSDAC catalog",
+)
+async def discover_mosdac(
+    date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    limit: int = Query(5, ge=1, le=20),
+    x_satellite_admin_token: Optional[str] = Header(None),
+) -> MOSDACDiscoveryResponse:
+    """Persist exact 3DS/3DR source granules; no product bytes are downloaded."""
+    _require_satellite_admin_token(x_satellite_admin_token)
+    target_date = None
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+    try:
+        summary = await discover_mosdac_products(target_date=target_date, limit=limit)
+    except MOSDACIntegrationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return MOSDACDiscoveryResponse(
+        dataset_id=summary.dataset_id or None,
+        discovered_count=summary.discovered_count,
+        inserted_count=summary.inserted_count,
+        updated_count=summary.updated_count,
+        note=(
+            "Source granules were cataloged only. Download and HDF processing remain separate controlled steps."
+        ),
+    )
+
+
 @router.get(
     "/observations",
     response_model=SatelliteObservationListResponse,
@@ -264,6 +326,25 @@ async def list_satellite_observations(
 )
 async def list_satellite_channels() -> dict:
     return {"channels": await available_channels()}
+
+
+@router.post(
+    "/observations/{observation_id}/download",
+    response_model=SatelliteObservationResponse,
+    summary="Download one discovered MOSDAC source product",
+)
+async def download_satellite_observation(
+    observation_id: int,
+    x_satellite_admin_token: Optional[str] = Header(None),
+) -> SatelliteObservationResponse:
+    """Download one product with explicit administrator authorization only."""
+    _require_satellite_admin_token(x_satellite_admin_token)
+    try:
+        observation = await download_mosdac_observation(observation_id)
+    except MOSDACIntegrationError as exc:
+        status_code = 404 if "not found" in str(exc).lower() else 503
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    return SatelliteObservationResponse(**observation_payload(observation))
 
 
 @router.get(
